@@ -23,6 +23,9 @@
 // header files for cuda implementation
 #include "ex0_scalarIntegrator_cuda.cuh"
 
+// header files for kokkos
+#include <Kokkos_Core.hpp>
+
 using std::string;
 using std::vector;
 using std::array;
@@ -48,6 +51,22 @@ public:
 
 private:
   TbbFunctor();
+
+};
+
+struct KokkosFunctor {
+
+  const double _dx;
+
+  KokkosFunctor(const double dx) : _dx(dx) {
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const unsigned int intervalIndex) const {
+  }
+
+private:
+  KokkosFunctor();
 
 };
 
@@ -136,6 +155,8 @@ int main(int argc, char* argv[]) {
   numberOfThreadsArray.push_back(2);
   numberOfThreadsArray.push_back(4);
   numberOfThreadsArray.push_back(8);
+  numberOfThreadsArray.push_back(16);
+  numberOfThreadsArray.push_back(24);
 
   // ===============================================================
   // ********************** < do tbb> ******************************
@@ -277,6 +298,49 @@ int main(int argc, char* argv[]) {
 
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   // ********************** </do cuda> *****************************
+  // ===============================================================
+
+
+  // ===============================================================
+  // ********************** < do kokkos> *****************************
+  // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+  printf("performing calculations with kokkos on %s\n",
+         typeid(Kokkos::DefaultExecutionSpace).name());
+
+  Kokkos::initialize();
+
+  const KokkosFunctor kokkosFunctor(dx);
+
+  // start timing
+  tic = high_resolution_clock::now();
+
+  const double kokkosIntegral = 0;
+  // TODO: calculate integral using kokkos
+
+  // stop timing
+  toc = high_resolution_clock::now();
+  const double kokkosElapsedTime =
+    duration_cast<duration<double> >(toc - tic).count();
+
+  // check the answer
+  const double kokkosRelativeError =
+    std::abs(libraryAnswer - kokkosIntegral) / std::abs(libraryAnswer);
+  if (kokkosRelativeError > 1e-3) {
+    fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
+            kokkosIntegral, libraryAnswer);
+    exit(1);
+  }
+
+  // output speedup
+  printf("kokkos : time %8.2e speedup %8.2e\n",
+         kokkosElapsedTime,
+         fastSerialElapsedTime / kokkosElapsedTime);
+
+  Kokkos::finalize();
+
+  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  // ********************** </do kokkos> ***************************
   // ===============================================================
 
   return 0;
