@@ -217,8 +217,8 @@ int main(int argc, char* argv[]) {
          numberOfThreadsArray) {
 
     double threadedIntegral = 0;
-    double *partialResults = malloc(numberOfThreads);
-    double chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
+    double *partialResults = (double*) malloc(numberOfThreads);
+    unsigned long chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
 
     // start timing
     tic = high_resolution_clock::now();
