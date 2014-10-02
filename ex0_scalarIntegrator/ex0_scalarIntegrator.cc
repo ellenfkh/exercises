@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e6;
+  const unsigned long numberOfIntervals = 1e2;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
@@ -218,27 +218,28 @@ int main(int argc, char* argv[]) {
          numberOfThreadsArray) {
 
     double threadedIntegral = 0;
-    double *partialResults = (double*) malloc(numberOfThreads);
-    unsigned long chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
-    printf("%u %lu", numberOfThreads, chunkPerThread);
+    double partialResults[numberOfThreads];
+    unsigned long chunkPerThread = (numberOfIntervals/numberOfThreads) + 1;
+    //printf("%u %lu \n", numberOfThreads, chunkPerThread);
     // start timing
     tic = high_resolution_clock::now();
 
     #pragma omp parallel num_threads(numberOfThreads)
     {
       int id = omp_get_thread_num();
-      printf("%d", id);
+      //printf("%d", id);
       unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
       for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
-        const double evaluationPoint =
+    printf("%d ", i);
+    const double evaluationPoint =
           bounds[0] + (double(i) + 0.5) * dx;
         partialResults[id] += std::sin(evaluationPoint);
       }
+      partialResults[id]*=dx;
     }
     for(unsigned long i = 0; i < numberOfThreads;++i){
-      threadedIntegral += partialResults[i];
+    threadedIntegral += partialResults[i];
     }
-
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
@@ -247,10 +248,10 @@ int main(int argc, char* argv[]) {
     // check the answer
     const double threadedRelativeError =
       std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
-    if (threadedRelativeError > 1e-3) {
+    if (threadedRelativeError !=0) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               threadedIntegral, libraryAnswer);
-      exit(1);
+      //exit(1);
     }
 
     // output speedup
