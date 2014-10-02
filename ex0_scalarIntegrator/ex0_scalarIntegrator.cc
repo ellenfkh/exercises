@@ -33,6 +33,26 @@ using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
 
+__global__ void sum(double *toSum, unsigned int n)
+{
+  for(unsigned int i = 1; i < n; ++i)
+  {
+    toSum[0] += toSum[i];
+  }
+}
+
+__global__ void sumSection(double firstBound, unsigned long chunkSize,
+                    double* partial, unsigned long numberOfIntervals, double dx)
+{
+      int id = threadId.x;
+      unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
+      for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
+          const double evaluationPoint = bounds[0] + (double(i) + 0.5) * dx;
+          partialResults[id] += std::sin(evaluationPoint);
+      }
+      partialResults[id] *= dx;
+}
+
 class TbbFunctor {
 public:
 
@@ -238,7 +258,7 @@ int main(int argc, char* argv[]) {
     for(unsigned long i = 0; i < numberOfThreads;++i){
       threadedIntegral += partialResults[i];
     }
-
+    free(partialResults);
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
@@ -284,12 +304,17 @@ int main(int argc, char* argv[]) {
 
     // start timing
     tic = high_resolution_clock::now();
-
+    double *d_partial;
     double cudaIntegral = 0;
-    // TODO: do scalar integration with cuda for this number of threads per block
-    cudaDoScalarIntegration(numberOfThreadsPerBlock,
-                            &cudaIntegral);
+    unsigned long chunkPerThread = numberOfIntervals/numberOfThreads + 1;
+    cudaMalloc( (void**)&d_partial, sizeof(double)*numberOfThreadsPerBlock);
+    sumSection<<<1,numberOfThreadsPerBlock>>>(bounds[0], chunkPerThread, d_partial,
+                                              numberOfIntervals, dx);
+    cudaDeviceSynchronize();
 
+    sum<<1,1>>(d_partial, numberOfThreadsPerBlock);
+
+    cudaMemcpy(&cudaIntegral, d_partial, sizeof(double), cudaMemcpyDeviceToHost);
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =
