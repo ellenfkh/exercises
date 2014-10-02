@@ -1,6 +1,6 @@
 // -*- C++ -*-
 #include <cstdio>
-
+#include <cmath>
 #include <cuda_runtime.h>
 
 #include "ex0_scalarIntegrator_cuda.cuh"
@@ -20,13 +20,13 @@ __global__ void sum(double *toSum, unsigned int n)
 __global__ void sumSection(double firstBound, unsigned long chunkSize,
                     double* partial, unsigned long numberOfIntervals, double dx)
 {
-      int id = threadId.x;
-      unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
+      int id = threadIdx.x;
+      unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkSize);
       for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
-          const double evaluationPoint = bounds[0] + (double(i) + 0.5) * dx;
-          partialResults[id] += std::sin(evaluationPoint);
+          const double evaluationPoint = firstBound + (double(i) + 0.5) * dx;
+          partial[id] += std::sin(evaluationPoint);
       }
-      partialResults[id] *= dx;
+      partial[id] *= dx;
 }
 
 __global__
