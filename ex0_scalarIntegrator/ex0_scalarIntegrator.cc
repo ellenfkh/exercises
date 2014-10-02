@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e8;
+  const unsigned long numberOfIntervals = 1e6;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
@@ -216,13 +216,26 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreads :
          numberOfThreadsArray) {
 
-    // TODO: set the number of threads for openmp
+    double threadedIntegral = 0;
+    double *partialResults = malloc(sizeof(double * numberOfThreads));
+    double chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
 
     // start timing
     tic = high_resolution_clock::now();
 
-    double threadedIntegral = 0;
-    // TODO: do scalar integration with threads on openmp
+    #pragma omp parallel num_threads(4)
+    {
+      int id = opm_get_thread_num();
+      unsigned long threadMax = min(numberOfIntervals, (id+1)*chunkPerThread)
+      for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
+        const double evaluationPoint =
+          bounds[0] + (double(i) + 0.5) * dx;
+        partialResults[id] += std::sin(evaluationPoint);
+      }
+    }
+    for(i = 0; i < numberOfThreads;++i){
+      threadedIntegral += partialResults;
+    }
 
     // stop timing
     toc = high_resolution_clock::now();
