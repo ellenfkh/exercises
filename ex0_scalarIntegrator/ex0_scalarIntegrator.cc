@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
          numberOfThreadsArray) {
 
     double threadedIntegral = 0;
-    double *partialResults = malloc(sizeof(double * numberOfThreads));
+    double *partialResults = malloc(numberOfThreads);
     double chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
 
     // start timing
@@ -225,16 +225,16 @@ int main(int argc, char* argv[]) {
 
     #pragma omp parallel num_threads(4)
     {
-      int id = opm_get_thread_num();
-      unsigned long threadMax = min(numberOfIntervals, (id+1)*chunkPerThread)
+      int id = omp_get_thread_num();
+      unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
       for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
         const double evaluationPoint =
           bounds[0] + (double(i) + 0.5) * dx;
         partialResults[id] += std::sin(evaluationPoint);
       }
     }
-    for(i = 0; i < numberOfThreads;++i){
-      threadedIntegral += partialResults;
+    for(int i = 0; i < numberOfThreads;++i){
+      threadedIntegral += partialResults[i];
     }
 
     // stop timing
