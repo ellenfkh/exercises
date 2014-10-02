@@ -220,13 +220,14 @@ int main(int argc, char* argv[]) {
     double threadedIntegral = 0;
     double *partialResults = (double*) malloc(numberOfThreads);
     unsigned long chunkPerThread = ceil(numberOfIntervals/numberOfThreads);
-
+    printf("%lu %lu", numberOfThreads, chunkPerThread)
     // start timing
     tic = high_resolution_clock::now();
 
     #pragma omp parallel num_threads(numberOfThreads)
     {
       int id = omp_get_thread_num();
+      printf("%d", id)
       unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
       for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
         const double evaluationPoint =
