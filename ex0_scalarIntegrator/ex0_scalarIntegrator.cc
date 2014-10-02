@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    #pragma omp parallel num_threads(4)
+    #pragma omp parallel num_threads(numberOfThreads)
     {
       int id = omp_get_thread_num();
       unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
