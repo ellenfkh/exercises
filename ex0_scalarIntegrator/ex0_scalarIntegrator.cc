@@ -204,10 +204,10 @@ int main(int argc, char* argv[]) {
       duration_cast<duration<double> >(toc - tic).count();
 
     // somehow get the threaded integral answer
-    const double threadedIntegral = 0;
+    //const double threadedIntegral = 0;
     // check the answer
-    const double threadedRelativeError =
-      std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
+    //const double threadedRelativeError =
+      //std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
     /*
     if (threadedRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
