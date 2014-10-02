@@ -22,7 +22,7 @@ __global__ void sumSection(double firstBound, unsigned long chunkSize,
 {
       int id = threadIdx.x;
       unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkSize);
-      for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
+      for(unsigned long i = id*chunkSize; i < threadMax; ++i) {
           const double evaluationPoint = firstBound + (double(i) + 0.5) * dx;
           partial[id] += std::sin(evaluationPoint);
       }
