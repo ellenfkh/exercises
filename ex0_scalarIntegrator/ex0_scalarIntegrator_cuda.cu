@@ -17,8 +17,8 @@ __global__ void sum(double *toSum, unsigned int n)
   }
 }
 
-__global__ void sumSection(double firstBound, unsigned long chunkSize,
-                    double* partial, unsigned long numberOfIntervals, double dx)
+__global__ void sumSection(double firstBound, unsigned long long chunkSize,
+                    double* partial, unsigned long long numberOfIntervals, double dx)
 {
       int id = threadIdx.x;
       unsigned long threadMax = min(numberOfIntervals, (id+1)*chunkSize);
