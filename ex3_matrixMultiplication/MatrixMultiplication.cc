@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
              100. * cacheFriendlyElapsedTime / tbbElapsedTime / numberOfThreads);
     } else {
       printf("%-38s : incorrect checksum %lf instead of %lf\n",
-             methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+             methodName, tbbCheckSum, cacheUnfriendlyCheckSum);
     }
   }
 
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
              100. * cacheFriendlyElapsedTime / ompElapsedTime / numberOfThreads);
     } else {
       printf("%-38s : incorrect checksum %lf instead of %lf\n",
-             methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+             methodName, ompCheckSum, cacheUnfriendlyCheckSum);
     }
   }
 
@@ -434,7 +434,7 @@ int main(int argc, char* argv[]) {
                cacheFriendlyElapsedTime / cudaElapsedTime);
       } else {
         printf("%-38s : incorrect checksum %lf instead of %lf\n",
-               methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+               methodName, cudaCheckSum, cacheUnfriendlyCheckSum);
       }
     }
   }
@@ -482,7 +482,7 @@ int main(int argc, char* argv[]) {
            cacheFriendlyElapsedTime / kokkosElapsedTime);
   } else {
     printf("%-38s : incorrect checksum %lf instead of %lf\n",
-           methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+           methodName, kokkosCheckSum, cacheUnfriendlyCheckSum);
   }
 
   Kokkos::finalize();
@@ -538,7 +538,7 @@ int main(int argc, char* argv[]) {
            cacheFriendlyElapsedTime / eigenElapsedTime);
   } else {
     printf("%-38s : incorrect checksum %lf instead of %lf\n",
-           methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+           methodName, eigenCheckSum, cacheUnfriendlyCheckSum);
   }
 
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -587,7 +587,7 @@ int main(int argc, char* argv[]) {
              cacheFriendlyElapsedTime / tiledElapsedTime);
     } else {
       printf("%-38s : incorrect checksum %lf instead of %lf\n",
-             methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+             methodName, tiledCheckSum, cacheUnfriendlyCheckSum);
     }
 
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -635,7 +635,7 @@ int main(int argc, char* argv[]) {
                100. * cacheFriendlyElapsedTime / tbbElapsedTime / numberOfThreads);
       } else {
         printf("%-38s : incorrect checksum %lf instead of %lf\n",
-               methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+               methodName, tbbCheckSum, cacheUnfriendlyCheckSum);
       }
     }
 
@@ -676,7 +676,7 @@ int main(int argc, char* argv[]) {
                100. * cacheFriendlyElapsedTime / ompElapsedTime / numberOfThreads);
       } else {
         printf("%-38s : incorrect checksum %lf instead of %lf\n",
-               methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+               methodName, ompCheckSum, cacheUnfriendlyCheckSum);
       }
     }
 
@@ -740,7 +740,7 @@ int main(int argc, char* argv[]) {
              cacheFriendlyElapsedTime / cublasElapsedTime);
     } else {
       printf("%-38s : incorrect checksum %lf instead of %lf\n",
-             methodName, cacheFriendlyCheckSum, cacheUnfriendlyCheckSum);
+             methodName, cublasCheckSum, cacheUnfriendlyCheckSum);
     }
   }
 
