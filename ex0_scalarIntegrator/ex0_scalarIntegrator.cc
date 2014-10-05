@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    TbbOutputter tbbOutputter(bounds[0], dx, function);
+    TbbOutputter tbbOutputter(bounds[0], dx, myFunctor);
 
     // start timing
     tic = high_resolution_clock::now();
@@ -249,27 +249,12 @@ int main(int argc, char* argv[]) {
          numberOfThreadsArray) {
 
     double threadedIntegral = 0;
-    double partialResults[numberOfThreads];
-    unsigned long chunkPerThread = (numberOfIntervals/numberOfThreads) + 1;
-    //printf("%u %lu \n", numberOfThreads, chunkPerThread);
     // start timing
     tic = high_resolution_clock::now();
 
     #pragma omp parallel num_threads(numberOfThreads)
     {
-      int id = omp_get_thread_num();
-      //printf("%d", id);
-      unsigned long threadMax = std::min(numberOfIntervals, (id+1)*chunkPerThread);
-      for(unsigned long i = id*chunkPerThread; i < threadMax; ++i) {
-    printf("%d ", i);
-    const double evaluationPoint =
-          bounds[0] + (double(i) + 0.5) * dx;
-        partialResults[id] += std::sin(evaluationPoint);
-      }
-      partialResults[id]*=dx;
-    }
-    for(unsigned long i = 0; i < numberOfThreads;++i){
-    threadedIntegral += partialResults[i];
+
     }
 
     // stop timing
@@ -283,7 +268,7 @@ int main(int argc, char* argv[]) {
     if (threadedRelativeError !=0) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               threadedIntegral, libraryAnswer);
-      //exit(1);
+      exit(1);
     }
 
     // output speedup
@@ -315,6 +300,7 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
+    double cudaIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
 
