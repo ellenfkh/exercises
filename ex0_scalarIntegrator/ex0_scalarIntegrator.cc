@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
   // ===============================================================
   // ********************** < do tbb> ******************************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-
+  myFunctor function;
   printf("performing calculations with tbb\n");
   // for each number of threads
   for (const unsigned int numberOfThreads :
@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    TbbOutputter tbbOutputter(bounds[0], dx, myFunctor);
+    TbbOutputter tbbOutputter(bounds[0], dx, function);
 
     // start timing
     tic = high_resolution_clock::now();
