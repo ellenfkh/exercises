@@ -33,24 +33,56 @@ using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
 
-class TbbFunctor {
+class myFunctor {
 public:
+  myFunctor() {
 
-  TbbFunctor(const array<double, 2> bounds) {
   }
 
-  TbbFunctor(const TbbFunctor & other,
-             tbb::split) {
+  double operator()(double functionInput) {
+    return std::sin(functionInput);
+  }
+};
+
+class TbbOutputter {
+public:
+
+  const double startingPoint_;
+
+  const double dx_;
+
+  myFunctor function_;
+
+  double sum_;
+
+  TbbOutputter(const double startingPoint, const double dx, myFunctor
+    function) :
+    startingPoint_(startingPoint), dx_(dx), function_(function), sum_(0) {
+  }
+
+  TbbOutputter(const TbbOutputter & other,
+               tbb::split) :
+    startingPoint_(other.startingPoint_), dx_(other.dx_),
+    function_(other.function_), sum_(0) {
+
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) {
+
+    double sum = sum_;
+
+    for(unsigned int i=range.begin(); i!= range.end(); ++i )
+            sum += function_(startingPoint_ + (double(i) + .5) * dx_);
+
+    sum_ = sum;
   }
 
-  void join(const TbbFunctor & other) {
+  void join(const TbbOutputter & other) {
+    sum_ += other.sum_;
   }
 
 private:
-  TbbFunctor();
+  TbbOutputter();
 
 };
 
@@ -170,31 +202,30 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    // prepare the tbb functor.
-    TbbFunctor tbbFunctor(bounds);
+    TbbOutputter tbbOutputter(bounds[0], dx, function);
 
     // start timing
     tic = high_resolution_clock::now();
     // dispatch threads
-    parallel_reduce(tbb::blocked_range<size_t>(0, 0),
-                    tbbFunctor);
+    parallel_reduce(tbb::blocked_range<size_t>(0, numberOfIntervals),
+                    tbbOutputter);
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
       duration_cast<duration<double> >(toc - tic).count();
 
     // somehow get the threaded integral answer
-    //const double threadedIntegral = 0;
+    const double threadedIntegral = tbbOutputter.sum_ * dx;
     // check the answer
-    //const double threadedRelativeError =
-      //std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
-    /*
+    const double threadedRelativeError =
+      std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
+
     if (threadedRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               threadedIntegral, libraryAnswer);
       exit(1);
     }
-    */
+
     // output speedup
     printf("%3u : time %8.2e speedup %8.2e (%%%5.1f of ideal)\n",
            numberOfThreads,
@@ -286,17 +317,7 @@ int main(int argc, char* argv[]) {
 
     // start timing
     tic = high_resolution_clock::now();
-    double *d_partial;
-    double cudaIntegral = 0;
-    unsigned long chunkPerThread = numberOfIntervals/numberOfThreads + 1;
-    cudaMalloc( (void**)&d_partial, sizeof(double)*numberOfThreadsPerBlock);
-    sumSection<<<1,numberOfThreadsPerBlock>>>(bounds[0], chunkPerThread, d_partial,
-                                              numberOfIntervals, dx);
-    cudaDeviceSynchronize();
 
-    sum<<1,1>>(d_partial, numberOfThreadsPerBlock);
-
-    cudaMemcpy(&cudaIntegral, d_partial, sizeof(double), cudaMemcpyDeviceToHost);
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =

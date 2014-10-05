@@ -48,7 +48,19 @@ cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
                         double * const output) {
 
   // TODO: you have to do stuff in here, the junk below is just to show syntax
+  double *d_partial;
+  double cudaIntegral = 0;
+  unsigned long chunkPerThread = numberOfIntervals/numberOfThreads + 1;
+  cudaMalloc( (void**)&d_partial, sizeof(double)*numberOfThreadsPerBlock);
+  sumSection<<<1,numberOfThreadsPerBlock>>>(bounds[0], chunkPerThread, d_partial,
+                                            numberOfIntervals, dx);
+  cudaDeviceSynchronize();
 
+  sum<<1,1>>(d_partial, numberOfThreadsPerBlock);
+
+  cudaMemcpy(&cudaIntegral, d_partial, sizeof(double), cudaMemcpyDeviceToHost);
+
+  /*
   // this is how to use constant memory:
   // make some stuff that we'll copy into constant memory
   double * iLikePuppies = new double[MAX_NUMBER_OF_PUPPIES];
@@ -98,4 +110,5 @@ cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
   // clean up
   cudaFree(dev_junk);
   cudaFree(dev_output);
+  */
 }
