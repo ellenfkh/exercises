@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-
+    /*
     omp_set_num_threads(numberOfThreads)
     #pragma omp parallel for reduction(+:threadedIntegral)
     {
@@ -260,7 +260,7 @@ int main(int argc, char* argv[]) {
         threadedIntegral += std::sin(i);
       }
     }
-
+    */
     threadedIntegral *= dx;
     // stop timing
     toc = high_resolution_clock::now();
