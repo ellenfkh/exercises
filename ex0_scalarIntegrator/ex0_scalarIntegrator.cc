@@ -91,10 +91,12 @@ struct KokkosFunctor {
   const double _dx;
 
   KokkosFunctor(const double dx) : _dx(dx) {
+
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const unsigned int intervalIndex) const {
+  void operator()(const unsigned int intervalIndex, float &sum) const {
+    sum += std::sin((double(intervalIndex) + .5)*dx);
   }
 
 private:
@@ -253,12 +255,12 @@ int main(int argc, char* argv[]) {
     tic = high_resolution_clock::now();
 
     omp_set_num_threads(numberOfThreads);
-    
+
     #pragma omp parallel for reduction(+:threadedIntegral)
       for(unsigned int i = 0; i < numberOfIntervals; i += 1) {
         threadedIntegral += std::sin((double(i)+.5)*dx + bounds[0]);
       }
-    
+
     threadedIntegral *= dx;
     // stop timing
     toc = high_resolution_clock::now();
@@ -318,7 +320,7 @@ int main(int argc, char* argv[]) {
     if (cudaRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               cudaIntegral, libraryAnswer);
-      exit(1);
+      //exit(1);
     }
 
     // output speedup
@@ -348,7 +350,8 @@ int main(int argc, char* argv[]) {
   tic = high_resolution_clock::now();
 
   const double kokkosIntegral = 0;
-  // TODO: calculate integral using kokkos
+
+  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor(),kokkosIntegral);
 
   // stop timing
   toc = high_resolution_clock::now();
