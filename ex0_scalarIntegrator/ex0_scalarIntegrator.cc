@@ -351,7 +351,7 @@ int main(int argc, char* argv[]) {
 
   const double kokkosIntegral = 0;
 
-  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor,kokkosIntegral);
+  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor(),kokkosIntegral);
 
   // stop timing
   toc = high_resolution_clock::now();

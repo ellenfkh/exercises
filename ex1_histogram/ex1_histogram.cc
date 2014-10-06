@@ -34,28 +34,44 @@ using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
 
-class TbbFunctor {
+class TbbOutputter {
 public:
 
-  const unsigned int _numberOfBuckets;
+  unsigned long * input_;
 
-  TbbFunctor(const unsigned int numberOfBuckets) :
-    _numberOfBuckets(numberOfBuckets) {
+  atomic<unsigned long> * result_;
+
+  unsigned long numBuckets_;
+  unsigned long size_;
+
+  TbbOutputter(unsigned long * input, atomic<unsigned long> * results,
+    unsigned long numBuckets, unsigned long size)
+    : input_(input), result_(results), numBuckets_(numBuckets), size_(size) {
   }
 
-  TbbFunctor(const TbbFunctor & other,
-             tbb::split) :
-    _numberOfBuckets(other._numberOfBuckets) {
+  TbbOutputter(const TbbOutputter & other,
+               tbb::split)
+               : input_(other.input_), result_(other.result_),
+                  numBuckets_(other.numBuckets_), size_(other.size_){
+    //printf("split copy constructor called\n");
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) {
+    //printf("TbbOutputter asked to process range from %7zu to %7zu\n",
+           //range.begin(), range.end());
+
+    unsigned long bucketSize = size_/numBuckets_;
+    for(unsigned long i=range.begin(); i!= range.end(); ++i ) {
+      (result_ + (i/bucketSize))->fetch_and_increment();
+    }
   }
 
-  void join(const TbbFunctor & other) {
+  void join(const TbbOutputter & other) {
+
   }
 
 private:
-  TbbFunctor();
+  TbbOutputter();
 
 };
 
@@ -179,17 +195,16 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    // TODO: do tbb stuff
-
-    // prepare the tbb functor.
-    TbbFunctor tbbFunctor(numberOfBuckets);
+    atomic<unsigned long> * results = new atomic<unsigned long>[numberOfBuckets];
+    bzero(results, sizeof(atomic<unsigned long>) * numberOfElements);
+    TbbOutputter tbbOutputter(inputs, results, numberOfBuckets, numberOfElements);
 
     // start timing
     tic = high_resolution_clock::now();
     // dispatch threads
     parallel_reduce(tbb::blocked_range<size_t>(0, numberOfElements,
                                                grainSize),
-                    tbbFunctor);
+                    tbbOutputter);
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
