@@ -40,20 +40,16 @@ public:
 
   vector<unsigned int> * input_;
 
-  atomic<unsigned long> * result_;
+  vector<atomic<unsigned long>> * result_;
 
-  unsigned long numBuckets_;
-  unsigned long size_;
-
-  TbbOutputter(vector<unsigned int> * input, atomic<unsigned long> * results,
-    unsigned long numBuckets, unsigned long size)
-    : input_(input), result_(results), numBuckets_(numBuckets), size_(size) {
+  TbbOutputter(vector<unsigned int> * input, vector<atomic<unsigned long>> * result):
+    input_(input), result_(result){
+    
   }
 
   TbbOutputter(const TbbOutputter & other,
                tbb::split)
-               : input_(other.input_), result_(other.result_),
-                  numBuckets_(other.numBuckets_), size_(other.size_){
+               : input_(other.input_), result_(other.result_){
     //printf("split copy constructor called\n");
   }
 
@@ -61,9 +57,10 @@ public:
     //printf("TbbOutputter asked to process range from %7zu to %7zu\n",
            //range.begin(), range.end());
 
-    unsigned long bucketSize = size_/numBuckets_;
+    unsigned long bucketSize = input_->size()/result_->size();
     for(unsigned long i=range.begin(); i!= range.end(); ++i ) {
-      (result_ + (((*input_)[i])/bucketSize))->fetch_and_increment();
+      unsigned int value= (*input_)[i];
+      result_->at(value/bucketSize).fetch_and_increment();
     }
   }
 
@@ -149,7 +146,7 @@ int main(int argc, char* argv[]) {
   for (unsigned int index = 0; index < numberOfElements; ++index) {
     const unsigned int value = input[index];
     const unsigned int bucketNumber = value / bucketSize;
-    slowSerialHistogram[bucketNumber] += 1;
+    fastSerialHistogram[bucketNumber] += 1;
   }
   toc = high_resolution_clock::now();
   const double fastSerialElapsedTime =
@@ -197,9 +194,8 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    atomic<unsigned long> * results = new atomic<unsigned long>[numberOfBuckets];
-    //bzero(results, sizeof(atomic<unsigned long>) * numberOfElements);
-    TbbOutputter tbbOutputter(&input, results, numberOfBuckets, numberOfElements);
+    vector<atomic<unsigned long>> results(numberOfBuckets,0);
+    TbbOutputter tbbOutputter(&input, &results);
 
     // start timing
     tic = high_resolution_clock::now();
@@ -213,12 +209,11 @@ int main(int argc, char* argv[]) {
       duration_cast<duration<double> >(toc - tic).count();
 
     // check the answer
-    atomic<unsigned long> * tbbHistogram = tbbOutputter.result_;
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
-      if (tbbHistogram[bucketIndex] != bucketSize) {
+      if (results[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-                bucketIndex, unsigned(tbbHistogram[bucketIndex]),
+                bucketIndex, unsigned(results[bucketIndex]),
                 bucketSize);
         exit(1);
       }
