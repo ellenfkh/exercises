@@ -252,11 +252,14 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    #pragma omp parallel num_threads(numberOfThreads)
+    #pragma omp parallel for reduction(+:threadedIntegral) num_threads(numberOfThreads)
     {
-
+      for(double i = bounds[0]; i < bounds[1]; i += dx) {
+        threadedIntegral += std::sin(i);
+      }
     }
 
+    threadedIntegral *= dx;
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
