@@ -144,7 +144,13 @@ int main(int argc, char* argv[]) {
 
   // TODO: can you make the serial one go faster? i can get about a
   //  15-20% speedup, but that's about it.  not very interesting
+  // TODO: do this better
 
+  for (unsigned int index = 0; index < numberOfElements; ++index) {
+    const unsigned int value = input[index];
+    const unsigned int bucketNumber = value / bucketSize;
+    slowSerialHistogram[bucketNumber] += 1;
+  }
   toc = high_resolution_clock::now();
   const double fastSerialElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
