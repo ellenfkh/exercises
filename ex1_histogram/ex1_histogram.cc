@@ -254,7 +254,12 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    // TODO: do openmp
+    #pragma omp parallel for
+      for(unsigned int i = 0; i < input.size(); ++i) {
+        #pragma omp atomic update
+          ompHistogram[input[i]/bucketSize] += 1;
+      }
+    
 
     // stop timing
     toc = high_resolution_clock::now();
