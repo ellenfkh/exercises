@@ -96,7 +96,7 @@ struct KokkosFunctor {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int intervalIndex, float &sum) const {
-    sum += std::sin((double(intervalIndex) + .5)*dx);
+    sum += std::sin((double(intervalIndex) + .5)*_dx);
   }
 
 private:
@@ -351,7 +351,7 @@ int main(int argc, char* argv[]) {
 
   const double kokkosIntegral = 0;
 
-  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor(),kokkosIntegral);
+  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor,kokkosIntegral);
 
   // stop timing
   toc = high_resolution_clock::now();
