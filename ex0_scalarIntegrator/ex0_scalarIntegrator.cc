@@ -87,21 +87,20 @@ private:
 };
 
 struct KokkosFunctor {
-
-  const double _dx;
-
-  KokkosFunctor(const double dx) : _dx(dx) {
-
-  }
+  typedef double value_type;
+  const double dx_;
+  
+  KokkosFunctor(double dx): dx_(dx) {}
+  
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const unsigned int intervalIndex, float &sum) const {
-    sum += std::sin((double(intervalIndex) + .5)*_dx);
+  void operator()(int intervalIndex, double &sum) const {
+    sum += std::sin((double(intervalIndex) + .5)*dx_);
   }
 
 private:
   KokkosFunctor();
-
+  
 };
 
 int main(int argc, char* argv[]) {
@@ -344,15 +343,16 @@ int main(int argc, char* argv[]) {
 
   Kokkos::initialize();
 
-  const KokkosFunctor kokkosFunctor(dx);
+  //const funct KokkosFunctor();
 
   // start timing
   tic = high_resolution_clock::now();
 
-  const double kokkosIntegral = 0;
+  double kokkosIntegral = 0;
 
-  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor,kokkosIntegral);
-
+  Kokkos::parallel_reduce(numberOfIntervals, KokkosFunctor(dx),kokkosIntegral);
+  
+  kokkosIntegral *= dx;
   // stop timing
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =
