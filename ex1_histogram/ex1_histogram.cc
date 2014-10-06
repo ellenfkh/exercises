@@ -20,7 +20,7 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_scheduler_init.h>
-
+#include <tbb/atomic.h>
 // header files for cuda implementation
 #include "ex1_histogram_cuda.cuh"
 
@@ -33,18 +33,19 @@ using std::array;
 using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
+using tbb::atomic;
 
 class TbbOutputter {
 public:
 
-  unsigned long * input_;
+  vector<unsigned int> * input_;
 
   atomic<unsigned long> * result_;
 
   unsigned long numBuckets_;
   unsigned long size_;
 
-  TbbOutputter(unsigned long * input, atomic<unsigned long> * results,
+  TbbOutputter(vector<unsigned int> * input, atomic<unsigned long> * results,
     unsigned long numBuckets, unsigned long size)
     : input_(input), result_(results), numBuckets_(numBuckets), size_(size) {
   }
@@ -62,7 +63,7 @@ public:
 
     unsigned long bucketSize = size_/numBuckets_;
     for(unsigned long i=range.begin(); i!= range.end(); ++i ) {
-      (result_ + (i/bucketSize))->fetch_and_increment();
+      (result_ + (((*input_)[i])/bucketSize))->fetch_and_increment();
     }
   }
 
@@ -95,9 +96,9 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int numberOfElements = 1e7;
+  const unsigned int numberOfElements = 1e2;
   // The number of buckets in our histogram
-  const unsigned int numberOfBuckets = 1e3;
+  const unsigned int numberOfBuckets = 1e2;
 
   // these are c++ timers...for timing
   high_resolution_clock::time_point tic;
@@ -108,31 +109,26 @@ int main(int argc, char* argv[]) {
   for(unsigned int i = 0; i < numberOfElements; ++i) {
     input[i] = i;
   }
-  std::random_shuffle(input.begin(), input.end());
+  //std::random_shuffle(input.begin(), input.end());
 
   // ===============================================================
   // ********************** < do slow serial> **********************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-  vector<unsigned int> slowSerialHistogram(numberOfBuckets, 0);
+  vector<unsigned int> slowSerialHistogram(numberOfBuckets);
   tic = high_resolution_clock::now();
   const unsigned int bucketSize = input.size()/numberOfBuckets;
   for (unsigned int index = 0; index < numberOfElements; ++index) {
     const unsigned int value = input[index];
     const unsigned int bucketNumber = value / bucketSize;
-    ++slowSerialHistogram[bucketNumber];
+    slowSerialHistogram[bucketNumber] += 1;
   }
   toc = high_resolution_clock::now();
   const double slowSerialElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
-
-  for (unsigned int bucketIndex = 0;
-       bucketIndex < numberOfBuckets; ++bucketIndex) {
-    if (slowSerialHistogram[bucketIndex] != bucketSize) {
-      fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-              bucketIndex, slowSerialHistogram[bucketIndex], bucketSize);
-      exit(1);
-    }
+  for(unsigned int bucketIndex = 0; bucketIndex < numberOfBuckets; ++bucketIndex){
+    if(slowSerialHistogram[bucketIndex]!= bucketSize)
+      fprintf(stderr, "wrong");
   }
 
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -196,8 +192,8 @@ int main(int argc, char* argv[]) {
     tbb::task_scheduler_init init(numberOfThreads);
 
     atomic<unsigned long> * results = new atomic<unsigned long>[numberOfBuckets];
-    bzero(results, sizeof(atomic<unsigned long>) * numberOfElements);
-    TbbOutputter tbbOutputter(inputs, results, numberOfBuckets, numberOfElements);
+    //bzero(results, sizeof(atomic<unsigned long>) * numberOfElements);
+    TbbOutputter tbbOutputter(&input, results, numberOfBuckets, numberOfElements);
 
     // start timing
     tic = high_resolution_clock::now();
@@ -211,7 +207,7 @@ int main(int argc, char* argv[]) {
       duration_cast<duration<double> >(toc - tic).count();
 
     // check the answer
-    vector<unsigned int> tbbHistogram(numberOfBuckets, 0);
+    atomic<unsigned long> * tbbHistogram = tbbOutputter.result_;
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
       if (tbbHistogram[bucketIndex] != bucketSize) {
