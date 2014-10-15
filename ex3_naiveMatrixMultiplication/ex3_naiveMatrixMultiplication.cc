@@ -316,6 +316,7 @@ int main(int argc, char* argv[]) {
       // dispatch threads
       parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
                    tbbFunctor);
+
     }
     // stop timing
     toc = high_resolution_clock::now();
@@ -358,14 +359,27 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreads :
          numberOfThreadsArray) {
 
-    // TODO: set the number of threads for openmp
+
+    // set the number of threads for openmp
+    omp_set_num_threads(numberOfThreads);
 
     // start timing
     tic = high_resolution_clock::now();
 
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
-      // TODO: do omp stuff
+      resultMatrix.fill(0);
+
+      #pragma omp parallel for
+      for(unsigned int i = 0; i < matrixSize*matrixSize; ++i) {
+        unsigned int row = i / matrixSize;
+        unsigned int col = i % matrixSize;
+
+        for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
+          resultMatrix->operator()(i) += leftMatrix->operator()(row, dummy) *
+          fastRightMatrix->operator()(dummy, col);
+        }
+      }
     }
 
     // stop timing
