@@ -406,7 +406,7 @@ int main(int argc, char* argv[]) {
 
         for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
           resultMatrix(i) += leftMatrix(row, dummy) *
-          fastRightMatrix(dummy, col);
+          rightMatrixCol(dummy, col);
         }
       }
     }
