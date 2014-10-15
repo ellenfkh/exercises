@@ -313,6 +313,8 @@ int main(int argc, char* argv[]) {
     tic = high_resolution_clock::now();
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
+
+      resultMatrix.fill(0);
       // dispatch threads
       parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
                    tbbFunctor);
