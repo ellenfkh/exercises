@@ -130,8 +130,9 @@ public:
       unsigned int row = i / _matrixSize;
       unsigned int col = i % _matrixSize;
 
-      for(int dummy = 0; dummy < _matrixSize; ++dummy) {
-        _resultMatrix->()(i) += _leftMatrix->()(row, dummy) * _rightMatrix->()(dummy, col);
+      for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
+        _resultMatrix->operator()(i) += _leftMatrix->operator()(row, dummy) *
+        _rightMatrix->operator()(dummy, col);
       }
     }
 
