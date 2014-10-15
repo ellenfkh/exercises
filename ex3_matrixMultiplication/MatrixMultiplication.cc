@@ -541,7 +541,7 @@ int main(int argc, char* argv[]) {
     matrixView_type results("A", matrixSize*matrixSize);
 
     Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
-    &rightMatrixCol, &results);
+    &rightMatrixCol, &results));
   }
 
   // stop timing
