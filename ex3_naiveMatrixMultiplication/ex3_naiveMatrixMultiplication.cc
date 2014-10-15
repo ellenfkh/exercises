@@ -188,11 +188,27 @@ int main(int argc, char* argv[]) {
 
   printf("performing fast serial\n");
 
+  ColMajorMatrix fastRightMatrix(matrixSize);
+
+  for (unsigned int row = 0; row < matrixSize; ++row) {
+    for (unsigned int col = 0; col < matrixSize; ++col) {
+      fastRightMatrix(row,col) = rightMatrix(row,col);
+    }
+  }
+
   tic = high_resolution_clock::now();
 
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
-    // TODO: can you do it faster without using threads?
+    for (unsigned int row = 0; row < matrixSize; ++row) {
+      for (unsigned int col = 0; col < matrixSize; ++col) {
+        for (unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
+          resultMatrix(row, col) +=
+            leftMatrix(row, dummy) * fastRightMatrix(dummy, col);
+        }
+      }
+    }
+    resultMatrix.fill(0);
   }
 
   toc = high_resolution_clock::now();

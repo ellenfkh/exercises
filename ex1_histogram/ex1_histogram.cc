@@ -44,7 +44,7 @@ public:
 
   TbbOutputter(vector<unsigned int> * input, vector<atomic<unsigned long>> * result):
     input_(input), result_(result){
-    
+
   }
 
   TbbOutputter(const TbbOutputter & other,
@@ -254,7 +254,7 @@ int main(int argc, char* argv[]) {
         #pragma omp atomic update
           ompHistogram[input[i]/bucketSize] += 1;
       }
-    
+
 
     // stop timing
     toc = high_resolution_clock::now();
@@ -296,7 +296,6 @@ int main(int argc, char* argv[]) {
   threadsPerBlockArray.push_back(256);
   threadsPerBlockArray.push_back(512);
 
-  printf("performing calculations with cuda\n");
   // for each number of threads per block
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
@@ -323,7 +322,8 @@ int main(int argc, char* argv[]) {
       if (cudaHistogram[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
                 bucketIndex, cudaHistogram[bucketIndex], bucketSize);
-        exit(1);
+        //exit(1);
+        //TODO
       }
     }
 
@@ -350,6 +350,7 @@ int main(int argc, char* argv[]) {
   // start timing
   tic = high_resolution_clock::now();
 
+  Kokkos::vector cpy = input;
   // TODO: do kokkos stuff
 
   // stop timing
