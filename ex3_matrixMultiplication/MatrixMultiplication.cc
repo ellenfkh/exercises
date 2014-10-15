@@ -35,6 +35,7 @@
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
+typedef Kokkos::View<unsigned long *> matrixView_type;
 
 using std::string;
 using std::vector;
@@ -183,14 +184,28 @@ private:
 struct KokkosFunctor {
 
   const unsigned int _matrixSize;
+  RowMajorMatrix * _leftMatrix;
+  ColMajorMatrix * _rightMatrix;
+  RowMajorMatrix * _resultMatrix;
 
-  KokkosFunctor(const unsigned int matrixSize) :
-    _matrixSize(matrixSize) {
-  }
+  kokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
+              ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix):
+              _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
+              _resultMatrix(resultMatrix) {
+
+              }
+
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
-    // TODO: something!
+
+    unsigned int row = elementIndex / _matrixSize;
+    unsigned int col = elementIndex % _matrixSize;
+
+    for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
+      _resultMatrix->operator()(i) += _leftMatrix->operator()(row, dummy) *
+      _rightMatrix->operator()(dummy, col);
+    }
   }
 
 private:
@@ -523,7 +538,10 @@ int main(int argc, char* argv[]) {
 
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
-    // TODO: do kokkos calculation
+    matrixView_type results("A", matrixSize*matrixSize);
+
+    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
+    &rightMatrixCol, &results);
   }
 
   // stop timing
@@ -535,7 +553,7 @@ int main(int argc, char* argv[]) {
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += resultMatrix(row, col);
+      kokkosCheckSum += results(row*matrixSize + col);
     }
   }
   sprintf(methodName, "naive kokkos");
