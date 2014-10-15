@@ -188,7 +188,7 @@ struct KokkosFunctor {
   ColMajorMatrix * _rightMatrix;
   RowMajorMatrix * _resultMatrix;
 
-  kokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
+  KokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
               ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix):
               _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
               _resultMatrix(resultMatrix) {
