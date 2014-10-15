@@ -554,7 +554,7 @@ int main(int argc, char* argv[]) {
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += results(row*matrixSize + col);
+      kokkosCheckSum += finalResults(row*matrixSize + col);
     }
   }
   sprintf(methodName, "naive kokkos");
