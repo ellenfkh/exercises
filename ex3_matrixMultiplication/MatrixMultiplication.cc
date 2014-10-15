@@ -535,10 +535,10 @@ int main(int argc, char* argv[]) {
 
   // start timing
   tic = high_resolution_clock::now();
-
+  matrixView_type results;
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
-    matrixView_type results("A", matrixSize*matrixSize);
+    results("A", matrixSize*matrixSize);
 
     Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
     &rightMatrixCol, &results));
