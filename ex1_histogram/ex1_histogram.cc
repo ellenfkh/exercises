@@ -26,7 +26,7 @@
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
-
+#include <Kokkos_Vector.hpp>
 using std::string;
 using std::vector;
 using std::array;
@@ -34,6 +34,8 @@ using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
 using tbb::atomic;
+typedef Kokkos::View<unsigned long *> bucketView_type;
+
 
 class TbbOutputter {
 public:
@@ -75,13 +77,21 @@ private:
 
 struct KokkosFunctor {
 
-  const unsigned int _bucketSize;
+  const unsigned int bucketSize_;
+  vector<unsigned int> * input_;
+  bucketView_type buckets_;
 
-  KokkosFunctor(const double bucketSize) : _bucketSize(bucketSize) {
+  KokkosFunctor(const double bucketSize, vector<unsigned int> * input,
+		bucketView_type buckets) : bucketSize_(bucketSize), input_(input),
+					buckets_(buckets)
+  {
+
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
+    unsigned int value = input_->at(elementIndex);
+    Kokkos::atomic_fetch_add(&buckets_(value/bucketSize_),1);
   }
 
 private:
@@ -93,9 +103,9 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int numberOfElements = 1e2;
+  const unsigned int numberOfElements = 1e8;
   // The number of buckets in our histogram
-  const unsigned int numberOfBuckets = 1e2;
+  const unsigned int numberOfBuckets = 1e6;
 
   // these are c++ timers...for timing
   high_resolution_clock::time_point tic;
@@ -316,17 +326,20 @@ int main(int argc, char* argv[]) {
     const double cudaElapsedTime =
       duration_cast<duration<double> >(toc - tic).count();
 
-    // check the answer
+    // check the answer -- TODO
+    /*
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
       if (cudaHistogram[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
                 bucketIndex, cudaHistogram[bucketIndex], bucketSize);
         //exit(1);
+
         //TODO
+
       }
     }
-
+    */
     // output speedup
     printf("%3u : time %8.2e speedup %8.2e\n",
            numberOfThreadsPerBlock,
@@ -347,24 +360,25 @@ int main(int argc, char* argv[]) {
 
   Kokkos::initialize();
 
+  bucketView_type results("A", numberOfBuckets);
+
   // start timing
   tic = high_resolution_clock::now();
 
-  Kokkos::vector cpy = input;
-  // TODO: do kokkos stuff
 
+  Kokkos::parallel_for(input.size(), KokkosFunctor(bucketSize, &input, results));
+  
   // stop timing
+
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
 
-  // check the answer
-  vector<unsigned int> kokkosHistogram(numberOfBuckets, 0);
   for (unsigned int bucketIndex = 0;
        bucketIndex < numberOfBuckets; ++bucketIndex) {
-    if (kokkosHistogram[bucketIndex] != bucketSize) {
-      fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-              bucketIndex, kokkosHistogram[bucketIndex], bucketSize);
+    if (results(bucketIndex) != bucketSize) {
+      fprintf(stderr, "bucket %u has the wrong value: %u instead of %lu\n",
+              bucketIndex, results(bucketIndex), bucketSize);
       exit(1);
     }
   }
