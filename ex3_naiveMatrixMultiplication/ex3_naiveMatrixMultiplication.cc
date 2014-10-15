@@ -45,6 +45,18 @@ struct ColMajorMatrix {
 
   inline
   double &
+  operator()(const unsigned int index) {
+    return _data[index];
+  }
+
+  inline
+  double
+  operator()(const unsigned int index) const {
+    return _data[index];
+  }
+
+  inline
+  double &
   operator()(const unsigned int row, const unsigned int col) {
     return _data[row + col * _matrixSize];
   }
@@ -71,6 +83,18 @@ struct RowMajorMatrix {
 
   inline
   double &
+  operator()(const unsigned int index) {
+    return _data[index];
+  }
+
+  inline
+  double
+  operator()(const unsigned int index) const {
+    return _data[index];
+  }
+
+  inline
+  double &
   operator()(const unsigned int row, const unsigned int col) {
     return _data[row * _matrixSize + col];
   }
@@ -91,11 +115,26 @@ class TbbFunctor {
 public:
 
   const unsigned int _matrixSize;
-  TbbFunctor(const unsigned int matrixSize) :
-    _matrixSize(matrixSize) {
+  RowMajorMatrix * _leftMatrix;
+  ColMajorMatrix * _rightMatrix;
+  RowMajorMatrix * _resultMatrix;
+
+  TbbFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
+              ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix) :
+    _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
+    _resultMatrix(resultMatrix) {
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) const {
+    for(unsigned int i = range.begin(); i != range.end(); ++i) {
+      unsigned int row = i / _matrixSize;
+      unsigned int col = i % _matrixSize;
+
+      for(int dummy = 0; dummy < _matrixSize; ++dummy) {
+        _resultMatrix->()(i) += _leftMatrix->()(row, dummy) * _rightMatrix->()(dummy, col);
+      }
+    }
+
   }
 
 private:
@@ -203,7 +242,7 @@ int main(int argc, char* argv[]) {
     resultMatrix.fill(0);
     for (unsigned int row = 0; row < matrixSize; ++row) {
       for (unsigned int col = 0; col < matrixSize; ++col) {
-       
+
         for (unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
           resultMatrix(row, col) +=
             leftMatrix(row, dummy) * fastRightMatrix(dummy, col);
@@ -266,15 +305,15 @@ int main(int argc, char* argv[]) {
     tbb::task_scheduler_init init(numberOfThreads);
 
     // prepare the tbb functor.
-    const TbbFunctor tbbFunctor(matrixSize);
-    // TODO: do tbb stuff
+    const TbbFunctor tbbFunctor(matrixSize, &leftMatrix, &fastRightMatrix,
+                  &resultMatrix);
 
     // start timing
     tic = high_resolution_clock::now();
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
       // dispatch threads
-      parallel_for(tbb::blocked_range<size_t>(0, matrixSize, grainSize),
+      parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
                    tbbFunctor);
     }
     // stop timing
