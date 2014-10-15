@@ -345,7 +345,7 @@ int main(int argc, char* argv[]) {
 
       resultMatrix.fill(0);
       // dispatch threads
-      parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
+      parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize),
                    tbbFunctor);
 
     }
@@ -405,8 +405,8 @@ int main(int argc, char* argv[]) {
         unsigned int col = i % matrixSize;
 
         for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
-          resultMatrix->operator()(i) += leftMatrix->operator()(row, dummy) *
-          fastRightMatrix->operator()(dummy, col);
+          resultMatrix(i) += leftMatrix(row, dummy) *
+          fastRightMatrix(dummy, col);
         }
       }
     }
