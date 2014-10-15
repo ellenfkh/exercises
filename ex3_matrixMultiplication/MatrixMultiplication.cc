@@ -186,10 +186,10 @@ struct KokkosFunctor {
   const unsigned int _matrixSize;
   RowMajorMatrix * _leftMatrix;
   ColMajorMatrix * _rightMatrix;
-  matrixView_type * _resultMatrix;
+  matrixView_type  _resultMatrix;
 
   KokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
-              ColMajorMatrix * rightMatrix, matrixView_type * resultMatrix):
+              ColMajorMatrix * rightMatrix, matrixView_type  resultMatrix):
               _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
               _resultMatrix(resultMatrix) {
 
@@ -203,7 +203,7 @@ struct KokkosFunctor {
     unsigned int col = elementIndex % _matrixSize;
 
     for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix->operator()(elementIndex) += _leftMatrix->operator()(row, dummy) *
+      _resultMatrix(elementIndex) += _leftMatrix->operator()(row, dummy) *
       _rightMatrix->operator()(dummy, col);
     }
   }
@@ -541,7 +541,7 @@ int main(int argc, char* argv[]) {
     matrixView_type results("A", matrixSize*matrixSize);
 
     Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
-    &rightMatrixCol, &results));
+    &rightMatrixCol, results));
   //}
 
   // stop timing
