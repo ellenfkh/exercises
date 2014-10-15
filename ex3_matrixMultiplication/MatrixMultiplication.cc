@@ -536,14 +536,13 @@ int main(int argc, char* argv[]) {
   // start timing
   tic = high_resolution_clock::now();
   matrixView_type finalResults;
-  for (unsigned int repeatIndex = 0;
-       repeatIndex < numberOfRepeats; ++repeatIndex) {
+  //for (unsigned int repeatIndex = 0;
+       //repeatIndex < numberOfRepeats; ++repeatIndex) {
     matrixView_type results("A", matrixSize*matrixSize);
 
     Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
     &rightMatrixCol, &results));
-    finalResults = results;
-  }
+  //}
 
   // stop timing
   toc = high_resolution_clock::now();
@@ -554,7 +553,7 @@ int main(int argc, char* argv[]) {
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += finalResults(row*matrixSize + col);
+      kokkosCheckSum += results(row*matrixSize + col);
     }
   }
   sprintf(methodName, "naive kokkos");
