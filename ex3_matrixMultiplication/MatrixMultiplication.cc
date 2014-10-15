@@ -53,6 +53,18 @@ struct ColMajorMatrix {
 
   inline
   double &
+  operator()(const unsigned int index) {
+    return _data[index];
+  }
+
+  inline
+  double
+  operator()(const unsigned int index) const {
+    return _data[index];
+  }
+
+  inline
+  double &
   operator()(const unsigned int row, const unsigned int col) {
     return _data[row + col * _matrixSize];
   }
@@ -64,7 +76,7 @@ struct ColMajorMatrix {
   }
 
   void
-  fill(const double value) {
+  fill(const double d) {
     std::fill(_data.begin(), _data.end(), 0);
   }
 };
@@ -75,6 +87,18 @@ struct RowMajorMatrix {
 
   RowMajorMatrix(const unsigned int matrixSize) :
     _matrixSize(matrixSize), _data(_matrixSize*_matrixSize) {
+  }
+
+  inline
+  double &
+  operator()(const unsigned int index) {
+    return _data[index];
+  }
+
+  inline
+  double
+  operator()(const unsigned int index) const {
+    return _data[index];
   }
 
   inline
@@ -90,26 +114,40 @@ struct RowMajorMatrix {
   }
 
   void
-  fill(const double value) {
+  fill(const double d) {
     std::fill(_data.begin(), _data.end(), 0);
   }
 };
 
-class TbbFunctorNaive {
+class TbbFunctor {
 public:
 
   const unsigned int _matrixSize;
+  RowMajorMatrix * _leftMatrix;
+  ColMajorMatrix * _rightMatrix;
+  RowMajorMatrix * _resultMatrix;
 
-  TbbFunctorNaive(const unsigned int matrixSize) :
-    _matrixSize(matrixSize) {
+  TbbFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
+              ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix) :
+    _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
+    _resultMatrix(resultMatrix) {
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) const {
-    // TODO: something!
+    for(unsigned int i = range.begin(); i != range.end(); ++i) {
+      unsigned int row = i / _matrixSize;
+      unsigned int col = i % _matrixSize;
+
+      for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
+        _resultMatrix->operator()(i) += _leftMatrix->operator()(row, dummy) *
+        _rightMatrix->operator()(dummy, col);
+      }
+    }
+
   }
 
 private:
-  TbbFunctorNaive();
+  TbbFunctor();
 
 };
 
@@ -240,12 +278,29 @@ int main(int argc, char* argv[]) {
   // ********************** < do cache friendly> *******************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
+  ColMajorMatrix fastRightMatrix(matrixSize);
+
+  for (unsigned int row = 0; row < matrixSize; ++row) {
+    for (unsigned int col = 0; col < matrixSize; ++col) {
+      fastRightMatrix(row,col) = rightMatrix(row,col);
+    }
+  }
 
   tic = high_resolution_clock::now();
 
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
-    // TODO: do cache-friendly multiplication
+    resultMatrix.fill(0);
+    for (unsigned int row = 0; row < matrixSize; ++row) {
+      for (unsigned int col = 0; col < matrixSize; ++col) {
+
+        for (unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
+          resultMatrix(row, col) +=
+            leftMatrix(row, dummy) * fastRightMatrix(dummy, col);
+        }
+      }
+    }
+
   }
 
   toc = high_resolution_clock::now();
@@ -293,7 +348,10 @@ int main(int argc, char* argv[]) {
     tic = high_resolution_clock::now();
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
-      // TODO: dispatch threads
+      resultMatrix.fill(0);
+      // dispatch threads
+      parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
+                   tbbFunctor);
     }
     // stop timing
     toc = high_resolution_clock::now();
@@ -343,7 +401,18 @@ int main(int argc, char* argv[]) {
 
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
-      // TODO: do openmp
+      resultMatrix.fill(0);
+
+      #pragma omp parallel for
+      for(unsigned int i = 0; i < matrixSize*matrixSize; ++i) {
+        unsigned int row = i / matrixSize;
+        unsigned int col = i % matrixSize;
+
+        for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
+          resultMatrix->operator()(i) += leftMatrix->operator()(row, dummy) *
+          fastRightMatrix->operator()(dummy, col);
+        }
+      }
     }
 
     // stop timing
