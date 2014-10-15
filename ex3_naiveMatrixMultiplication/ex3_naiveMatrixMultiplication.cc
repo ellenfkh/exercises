@@ -200,15 +200,17 @@ int main(int argc, char* argv[]) {
 
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
+    resultMatrix.fill(0);
     for (unsigned int row = 0; row < matrixSize; ++row) {
       for (unsigned int col = 0; col < matrixSize; ++col) {
+       
         for (unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
           resultMatrix(row, col) +=
             leftMatrix(row, dummy) * fastRightMatrix(dummy, col);
         }
       }
     }
-    resultMatrix.fill(0);
+
   }
 
   toc = high_resolution_clock::now();
