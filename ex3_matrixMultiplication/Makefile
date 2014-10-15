@@ -9,11 +9,15 @@ ifeq ($(UNAME_S),Darwin)
   # cuda
   CUDA_PATH       ?= /usr/local/cuda
   CUDA_LIB_PATH   ?= $(CUDA_PATH)/lib/
-  LD_FLAGS        += -Xlinker -rpath $(CUDA_LIB_PATH) -L$(CUDA_LIB_PATH) -lcudart -lcufft
+  LD_FLAGS        += -Xlinker -rpath $(CUDA_LIB_PATH) -L$(CUDA_LIB_PATH) -lcudart -lcufft -lcublas
   # tbb
   TBB_DIR         += /opt/tbb-4.2
   # kokkos
   KOKKOS_DIR      := /opt/kokkos
+  # eigen
+  EIGEN_DIR       := /opt/eigen
+  # avx vectorization support
+  #CC_FLAGS        += -mavx -Wa,-q
 else
   # compiler
   CC              := g++
@@ -21,26 +25,33 @@ else
   CUDA_PATH       ?= /usr/local/cuda-6.5
   CUDA_LIB_PATH   ?= $(CUDA_PATH)/lib64/
   ifeq ($(OS_SIZE),32)
-    LD_FLAGS      += -L$(CUDA_LIB_PATH) -lcudart -lcufft
     CC_FLAGS      += -m32
   else
-    LD_FLAGS      += -L$(CUDA_LIB_PATH) -lcudart -lcufft
     CC_FLAGS      += -m64
   endif
+  LD_FLAGS      += -L$(CUDA_LIB_PATH) -lcudart -lcufft -lcublas
   # tbb
   TBB_DIR         += /clinic/2014/sandia14/tbb-4.3
   # kokkos
   KOKKOS_DIR      := /clinic/2014/sandia14/kokkos
-  CC_FLAGS        += -DENABLE_KOKKOS
+  # eigen
+  EIGEN_DIR       := /clinic/2014/sandia14/eigen
+  # tbb
+  CC_INCLUDE      += -I$(TBB_DIR)/include
+  LD_FLAGS        += -L$(TBB_DIR)/lib -ltbb
+  # avx vectorization support
+  CC_FLAGS        += -mavx
 endif
 
-# tbb
-CC_INCLUDE        += -I$(TBB_DIR)/include
-LD_FLAGS          += -L$(TBB_DIR)/lib -ltbb
+# cuda helper functions
+NVCC_INCLUDE      += -I$(CUDA_PATH)/samples/common/inc/
 
 # kokkos
 CC_INCLUDE        += -I$(KOKKOS_DIR)/core/src -I$(KOKKOS_DIR)/containers/src -I$(KOKKOS_DIR)/algorithms/src -I$(KOKKOS_DIR)/linalg/src -DKOKKOS_DONT_INCLUDE_CORE_CONFIG_H  -DKOKKOS_HAVE_PTHREAD -DKOKKOS_HAVE_OPENMP
 LD_FLAGS          += -L$(KOKKOS_DIR) -lkokkoscore
+
+# eigen
+CC_INCLUDE        += -I$(EIGEN_DIR)
 
 # OS-architecture specific flags
 ifeq ($(OS_SIZE),32)
@@ -55,15 +66,15 @@ NVCC            ?= $(CUDA_BIN_PATH)/nvcc
 
 CC_FLAGS   += -std=c++11 -fopenmp
 
-TARGETS = ex3_naiveMatrixMultiplication
+TARGETS = MatrixMultiplication
 
 all: $(TARGETS)
 
-ex3_naiveMatrixMultiplication: ex3_naiveMatrixMultiplication.cc ex3_naiveMatrixMultiplication_cuda.o
-	$(CC) $< -o $@ ex3_naiveMatrixMultiplication_cuda.o -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
+MatrixMultiplication: MatrixMultiplication.cc MatrixMultiplication_cuda.o
+	$(CC) $< -o $@ MatrixMultiplication_cuda.o -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
 
-ex3_naiveMatrixMultiplication_cuda.o: ex3_naiveMatrixMultiplication_cuda.cu
-	$(NVCC) $(NVCCFLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) -o $@ -c $<
+MatrixMultiplication_cuda.o: MatrixMultiplication_cuda.cu
+	$(NVCC) $(NVCCFLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) $(NVCC_INCLUDE) -o $@ -c $<
 
 clean:
 	rm -f *.o $(TARGETS)
