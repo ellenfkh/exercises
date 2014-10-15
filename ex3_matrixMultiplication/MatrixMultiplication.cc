@@ -278,13 +278,6 @@ int main(int argc, char* argv[]) {
   // ********************** < do cache friendly> *******************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-  ColMajorMatrix fastRightMatrix(matrixSize);
-
-  for (unsigned int row = 0; row < matrixSize; ++row) {
-    for (unsigned int col = 0; col < matrixSize; ++col) {
-      fastRightMatrix(row,col) = rightMatrix(row,col);
-    }
-  }
 
   tic = high_resolution_clock::now();
 
@@ -296,7 +289,7 @@ int main(int argc, char* argv[]) {
 
         for (unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
           resultMatrix(row, col) +=
-            leftMatrix(row, dummy) * fastRightMatrix(dummy, col);
+            leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
         }
       }
     }
@@ -342,16 +335,19 @@ int main(int argc, char* argv[]) {
     tbb::task_scheduler_init init(numberOfThreads);
 
     // prepare the tbb functor.
-    const TbbFunctorNaive tbbFunctor(matrixSize);
+    const TbbFunctor tbbFunctor(matrixSize, &leftMatrix, &rightMatrixCol,
+                  &resultMatrix);
 
     // start timing
     tic = high_resolution_clock::now();
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
+
       resultMatrix.fill(0);
       // dispatch threads
       parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize, grainSize),
                    tbbFunctor);
+
     }
     // stop timing
     toc = high_resolution_clock::now();
