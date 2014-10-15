@@ -186,10 +186,10 @@ struct KokkosFunctor {
   const unsigned int _matrixSize;
   RowMajorMatrix * _leftMatrix;
   ColMajorMatrix * _rightMatrix;
-  RowMajorMatrix * _resultMatrix;
+  matrixView_type * _resultMatrix;
 
   KokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
-              ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix):
+              ColMajorMatrix * rightMatrix, matrixView_type * resultMatrix):
               _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
               _resultMatrix(resultMatrix) {
 
@@ -203,7 +203,7 @@ struct KokkosFunctor {
     unsigned int col = elementIndex % _matrixSize;
 
     for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix->operator()(i) += _leftMatrix->operator()(row, dummy) *
+      _resultMatrix->operator()(elementIndex) += _leftMatrix->operator()(row, dummy) *
       _rightMatrix->operator()(dummy, col);
     }
   }
