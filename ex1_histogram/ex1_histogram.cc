@@ -311,7 +311,7 @@ int main(int argc, char* argv[]) {
   unsigned int * h_cudaInput = new unsigned int[numberOfElements];
   unsigned int * h_cudaOutput = new unsigned int[numberOfBuckets];
 
-  for(int index = 0; index < numberOfElements; ++index) {
+  for(unsigned int index = 0; index < numberOfElements; ++index) {
     h_cudaInput[index] = input[index];
   }
 
@@ -322,12 +322,7 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    cudaMalloc(&d_cudaInput, sizeof(unsigned int) * numberOfElements);
-    cudaMalloc(&d_cudaOutput, sizeof(unsigned int) * numberOfBuckets);
-    cudaMemset(d_cudaOutput, 0, sizeof(unsigned int) * numberOfBuckets);
-
-    cudaMemcpy(d_cudaInput, h_cudaInput,
-            sizeof(unsigned int) * numberOfElements, cudaMemcpyHostToDevice);
+    
 
     // do scalar integration with cuda for this number of threads per block
     cudaDoHistogramPopulation(numberOfThreadsPerBlock, h_cudaOutput,

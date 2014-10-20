@@ -27,6 +27,13 @@ cudaDoHistogramPopulation(const unsigned int threadsPerBlock,
                           unsigned int numElements,
                           unsigned int numBuckets) {
 
+    cudaMalloc(&d_cudaInput, sizeof(unsigned int) * numElements);
+    cudaMalloc(&d_cudaOutput, sizeof(unsigned int) * numBuckets);
+    cudaMemset(d_cudaOutput, 0, sizeof(unsigned int) * numBuckets);
+
+    cudaMemcpy(d_cudaInput, h_cudaInput,
+            sizeof(unsigned int) * numberOfElements, cudaMemcpyHostToDevice);
+
     dim3 blockSize(threadsPerBlock);
     dim3 gridSize((numElements / threadsPerBlock) + 1);
     const unsigned int bucketSize = numElements/numBuckets;
