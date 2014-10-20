@@ -306,8 +306,7 @@ int main(int argc, char* argv[]) {
   threadsPerBlockArray.push_back(256);
   threadsPerBlockArray.push_back(512);
 
-  unsigned int * d_cudaInput;
-  unsigned int * d_cudaOutput;
+
   unsigned int * h_cudaInput = new unsigned int[numberOfElements];
   unsigned int * h_cudaOutput = new unsigned int[numberOfBuckets];
 
@@ -322,12 +321,12 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    
+
 
     // do scalar integration with cuda for this number of threads per block
     cudaDoHistogramPopulation(numberOfThreadsPerBlock, h_cudaOutput,
-                                d_cudaInput, d_cudaOutput, numberOfElements,
-                                numberOfBuckets);
+                              h_cudaInput, d_cudaInput, d_cudaOutput,
+                              numberOfElements, numberOfBuckets);
 
     // stop timing
     toc = high_resolution_clock::now();
