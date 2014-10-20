@@ -6,7 +6,7 @@ void
 cudaDoHistogramPopulation(const unsigned int threadsPerBlock,
                           unsigned int * h_outputHistogram,
                           unsigned int * d_input,
-                          unsigned int * d_output
+                          unsigned int * d_output,
                           unsigned int numElements,
                           unsigned int numBuckets);
 
