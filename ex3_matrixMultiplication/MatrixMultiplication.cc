@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int matrixSize = 512 * 3;
+  const unsigned int matrixSize = 512 * 4;
   const unsigned int numberOfRepeats = 1;
 
   // we will repeat the computation for each of the numbers of threads
