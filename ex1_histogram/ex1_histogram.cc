@@ -103,9 +103,9 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int numberOfElements = 1e2;
+  const unsigned int numberOfElements = 1e8;
   // The number of buckets in our histogram
-  const unsigned int numberOfBuckets = 1e2;
+  const unsigned int numberOfBuckets = 1e6;
 
   // these are c++ timers...for timing
   high_resolution_clock::time_point tic;
@@ -306,7 +306,6 @@ int main(int argc, char* argv[]) {
   threadsPerBlockArray.push_back(256);
   threadsPerBlockArray.push_back(512);
 
-
   unsigned int * h_cudaInput = new unsigned int[numberOfElements];
   unsigned int * h_cudaOutput = new unsigned int[numberOfBuckets];
 
@@ -325,8 +324,7 @@ int main(int argc, char* argv[]) {
 
     // do scalar integration with cuda for this number of threads per block
     cudaDoHistogramPopulation(numberOfThreadsPerBlock, h_cudaOutput,
-                              h_cudaInput, d_cudaInput, d_cudaOutput,
-                              numberOfElements, numberOfBuckets);
+                              h_cudaInput, numberOfElements, numberOfBuckets);
 
     // stop timing
     toc = high_resolution_clock::now();
