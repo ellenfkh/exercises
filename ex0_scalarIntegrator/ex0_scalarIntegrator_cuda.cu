@@ -5,10 +5,6 @@
 
 #include "ex0_scalarIntegrator_cuda.cuh"
 
-#define MAX_NUMBER_OF_PUPPIES 3
-
-__constant__ double constantPuppies[MAX_NUMBER_OF_PUPPIES];
-
 __global__ void sum(double *toSum, unsigned int n)
 {
   for(unsigned int i = 1; i < n; ++i)
