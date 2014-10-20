@@ -204,7 +204,7 @@ struct KokkosFunctor {
     unsigned int col = elementIndex % _matrixSize;
 
     for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix(elementIndex) = _leftMatrix(dummy + row * _matrixSize) *
+      _resultMatrix(elementIndex) += _leftMatrix(dummy + row * _matrixSize) *
       _rightMatrix(col + dummy * _matrixSize);
     }
   }
@@ -561,7 +561,7 @@ int main(int argc, char* argv[]) {
     right, result));
     Kokkos::fence();
     Kokkos::deep_copy(h_result, result);
-    
+
     for(unsigned index = 0; index < matrixSize * matrixSize; ++index){
       resultMatrix(index) = h_result(index);
     }
