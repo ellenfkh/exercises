@@ -204,8 +204,8 @@ struct KokkosFunctor {
     unsigned int col = elementIndex % _matrixSize;
 
     for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix(elementIndex) = _leftMatrix(col + dummy * _matrixSize) *
-      _rightMatrix(row + dummy * _matrixSize);
+      _resultMatrix(elementIndex) = _leftMatrix(dummy + row * _matrixSize) *
+      _rightMatrix(col + dummy * _matrixSize);
     }
   }
 
@@ -549,7 +549,7 @@ int main(int argc, char* argv[]) {
 
     for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
       h_left(index) = leftMatrix(index);
-      h_right(index) = rightMatrixCol(index);
+      h_right(index) = rightMatrixRow(index);
       h_result(index) = 0;
     }
 
