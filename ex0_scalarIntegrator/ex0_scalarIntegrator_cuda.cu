@@ -37,14 +37,14 @@ cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
 
   if(myID < numberOfIntervals) {
     contributions[threadIdx.x] = std::sin(bounds[0] +
-                                    (double(intervalIndex) + 0.5) * dx);
+                                    (double(myID) + 0.5) * dx);
   }
 
   __syncthreads();
 
   if(threadIdx.x == 0) {
     for(int i = 1; i < blockDim.x; ++i) {
-      cotributions[0] += contributions[i];
+      contributions[0] += contributions[i];
     }
     atomicAdd(output, contributions[0]);
   }
