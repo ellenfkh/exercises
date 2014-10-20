@@ -103,9 +103,9 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int numberOfElements = 1e8;
+  const unsigned int numberOfElements = 1e2;
   // The number of buckets in our histogram
-  const unsigned int numberOfBuckets = 1e6;
+  const unsigned int numberOfBuckets = 1e2;
 
   // these are c++ timers...for timing
   high_resolution_clock::time_point tic;
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
   for(unsigned int i = 0; i < numberOfElements; ++i) {
     input[i] = i;
   }
-  //std::random_shuffle(input.begin(), input.end());
+  std::random_shuffle(input.begin(), input.end());
 
   // ===============================================================
   // ********************** < do slow serial> **********************
@@ -306,40 +306,51 @@ int main(int argc, char* argv[]) {
   threadsPerBlockArray.push_back(256);
   threadsPerBlockArray.push_back(512);
 
+  unsigned int * d_cudaInput;
+  unsigned int * d_cudaOutput;
+  unsigned int * h_cudaInput = new unsigned int[numberOfElements];
+  unsigned int * h_cudaOutput = new unsigned int[numberOfBuckets];
+
+  for(int index = 0; index < numberOfElements; ++index) {
+    h_cudaInput[index] = input[index];
+  }
+
   // for each number of threads per block
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
-    vector<unsigned int> cudaHistogram(numberOfBuckets, 0);
-
     // start timing
     tic = high_resolution_clock::now();
 
-    // TODO: do cuda stuff
+    cudaMalloc(&d_cudaInput, sizeof(unsigned int) * numberOfElements);
+    cudaMalloc(&d_cudaOutput, sizeof(unsigned int) * numberOfBuckets);
+    cudaMemset(d_cudaOutput, 0, sizeof(unsigned int) * numberOfBuckets);
+
+    cudaMemcpy(d_cudaInput, h_cudaInput,
+            sizeof(unsigned int) * numberOfElements, cudaMemcpyHostToDevice);
 
     // do scalar integration with cuda for this number of threads per block
-    cudaDoHistogramPopulation(numberOfThreadsPerBlock,
-                              &cudaHistogram[0]);
+    cudaDoHistogramPopulation(numberOfThreadsPerBlock, h_cudaOutput,
+                                d_cudaInput, d_cudaOutput, numberOfElements,
+                                numberOfBuckets);
 
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =
       duration_cast<duration<double> >(toc - tic).count();
 
-    // check the answer -- TODO
-    /*
+    // check the answer
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
-      if (cudaHistogram[bucketIndex] != bucketSize) {
+      if (h_cudaOutput[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-                bucketIndex, cudaHistogram[bucketIndex], bucketSize);
+                bucketIndex, h_cudaOutput[bucketIndex], bucketSize);
         //exit(1);
 
-        //TODO
 
       }
     }
-    */
+
     // output speedup
     printf("%3u : time %8.2e speedup %8.2e\n",
            numberOfThreadsPerBlock,
@@ -367,7 +378,7 @@ int main(int argc, char* argv[]) {
 
 
   Kokkos::parallel_for(input.size(), KokkosFunctor(bucketSize, &input, results));
-  
+
   // stop timing
 
   toc = high_resolution_clock::now();
