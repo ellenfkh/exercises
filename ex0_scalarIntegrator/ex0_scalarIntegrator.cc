@@ -89,9 +89,9 @@ private:
 struct KokkosFunctor {
   typedef double value_type;
   const double dx_;
-  
+
   KokkosFunctor(double dx): dx_(dx) {}
-  
+
 
   KOKKOS_INLINE_FUNCTION
   void operator()(int intervalIndex, double &sum) const {
@@ -100,7 +100,7 @@ struct KokkosFunctor {
 
 private:
   KokkosFunctor();
-  
+
 };
 
 int main(int argc, char* argv[]) {
@@ -307,7 +307,9 @@ int main(int argc, char* argv[]) {
     double cudaIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
-
+    cudaDoScalarIntegration(numberOfThreadsPerBlock,
+                            &cudaIntegral, bounds,
+                            numberOfIntervals, dx)
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =
@@ -357,7 +359,7 @@ int main(int argc, char* argv[]) {
 >>>>>>> 76a9fc8973d2db17911673ce63d2f2add646634e
 
   Kokkos::parallel_reduce(numberOfIntervals, KokkosFunctor(dx),kokkosIntegral);
-  
+
   kokkosIntegral *= dx;
   // stop timing
   toc = high_resolution_clock::now();

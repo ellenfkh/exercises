@@ -31,21 +31,57 @@ __global__ void sumSection(double firstBound, unsigned long long chunkSize,
 
 __global__
 void
-cudaDoScalarIntegration_kernel(double* output) {
+cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
+                              numberOfIntervals, double dx) {
   // block-wide reduction storage, size is determined by third kernel
   // launch argument (thing between <<< and >>>)
   extern __shared__ double contributions[];
 
-  // TODO: do scalar integration somehow
+  unsigned int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-  // reading from global memory
-  *output = 5;
+  if(myID < numberOfIntervals) {
+    contributions[threadIdx.x] = std::sin(bounds[0] +
+                                    (double(intervalIndex) + 0.5) * dx);
+  }
+
+  __syncthreads();
+
+  if(threadIdx.x == 0) {
+    for(int i = 1; i < blockDim.x; ++i) {
+      cotributions[0] += contributions[i];
+    }
+    atomicAdd(output, contributions[0]);
+  }
 
 }
 
 void
 cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
-                        double * const output) {
+                        double * const output, double * bounds,
+                        unsigned long numberOfIntervals, double dx) {
+
+  dim3 blockSize(numberOfThreadsPerBlock);
+  dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1)
+
+  // allocate somewhere to put our result
+  double *dev_output;
+  cudaMalloc((void **) &dev_output, 1*sizeof(double));
+  cudaMemset(dev_output, 0, sizeof(double))
+  // run the kernel
+  cudaDoScalarIntegration_kernel<<<gridSize,
+    blockSize,
+    numberOfThreadsPerBlock*sizeof(double)>>>(dev_output, bounds,
+                                              numberOfIntervals, dx);
+
+  // make sure that everything in flight has been completed
+  cudaDeviceSynchronize();
+  // copy over the output
+  cudaMemcpy(output, dev_output, 1*sizeof(double), cudaMemcpyDeviceToHost);
+
+
+  // clean up
+  cudaFree(dev_output);
+
 
   // TODO: you have to do stuff in here, the junk below is just to show syntax
   /*
