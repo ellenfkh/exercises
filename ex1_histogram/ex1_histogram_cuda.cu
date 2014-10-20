@@ -15,7 +15,7 @@ cudaDoHistogramPopulation_kernel(unsigned int * d_input, unsigned int * d_output
   if(myID < numElements) {
     const unsigned int value = d_input[myID];
     const unsigned int bucketNumber = value / bucketSize;
-    d_output[bucketNumber] += 1;
+    atomicAdd(&(d_output[bucketNumber]), (int) 1);
   }
 }
 
@@ -23,18 +23,16 @@ void
 cudaDoHistogramPopulation(const unsigned int threadsPerBlock,
                           unsigned int * h_outputHistogram,
                           unsigned int * h_cudaInput,
-                          unsigned int * d_input,
-                          unsigned int * d_output,
                           unsigned int numElements,
                           unsigned int numBuckets) {
 
-    unsigned int * d_cudaInput;
-    unsigned int * d_cudaOutput;
-    cudaMalloc(&d_cudaInput, sizeof(unsigned int) * numElements);
-    cudaMalloc(&d_cudaOutput, sizeof(unsigned int) * numBuckets);
-    cudaMemset(d_cudaOutput, 0, sizeof(unsigned int) * numBuckets);
+    unsigned int * d_input;
+    unsigned int * d_output;
+    cudaMalloc(&d_input, sizeof(unsigned int) * numElements);
+    cudaMalloc(&d_output, sizeof(unsigned int) * numBuckets);
+    cudaMemset(d_output, 0, sizeof(unsigned int) * numBuckets);
 
-    cudaMemcpy(d_cudaInput, h_cudaInput,
+    cudaMemcpy(d_input, h_cudaInput,
             sizeof(unsigned int) * numElements, cudaMemcpyHostToDevice);
 
     dim3 blockSize(threadsPerBlock);
