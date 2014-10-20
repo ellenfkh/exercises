@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
-    double cudaIntegral = 0;
+    float cudaIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
     cudaDoScalarIntegration(numberOfThreadsPerBlock,
@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
 
     // check the answer
     const double cudaRelativeError =
-      std::abs(libraryAnswer - cudaIntegral) / std::abs(libraryAnswer);
+      std::abs(float(libraryAnswer) - cudaIntegral) / std::abs(libraryAnswer);
     if (cudaRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               cudaIntegral, libraryAnswer);

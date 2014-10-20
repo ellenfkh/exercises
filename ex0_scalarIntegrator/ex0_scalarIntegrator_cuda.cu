@@ -37,7 +37,7 @@ cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
 
   if(myID < numberOfIntervals) {
     contributions[threadIdx.x] = std::sin(bounds[0] +
-                                    (double(myID) + 0.5) * dx);
+                                    (float(myID) + 0.5) * dx);
   }
 
   __syncthreads();
@@ -53,26 +53,26 @@ cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
 
 void
 cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
-                        double * const output, double * bounds,
+                        float * const output, double * bounds,
                         unsigned long numberOfIntervals, double dx) {
 
   dim3 blockSize(numberOfThreadsPerBlock);
   dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1)
 
   // allocate somewhere to put our result
-  double *dev_output;
-  cudaMalloc((void **) &dev_output, 1*sizeof(double));
-  cudaMemset(dev_output, 0, sizeof(double))
+  float *dev_output;
+  cudaMalloc((void **) &dev_output, 1*sizeof(float));
+  cudaMemset(dev_output, 0, sizeof(float))
   // run the kernel
   cudaDoScalarIntegration_kernel<<<gridSize,
     blockSize,
-    numberOfThreadsPerBlock*sizeof(double)>>>(dev_output, bounds,
+    numberOfThreadsPerBlock*sizeof(float)>>>(dev_output, bounds,
                                               numberOfIntervals, dx);
 
   // make sure that everything in flight has been completed
   cudaDeviceSynchronize();
   // copy over the output
-  cudaMemcpy(output, dev_output, 1*sizeof(double), cudaMemcpyDeviceToHost);
+  cudaMemcpy(output, dev_output, 1*sizeof(float), cudaMemcpyDeviceToHost);
 
 
   // clean up
