@@ -35,7 +35,8 @@
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
-typedef Kokkos::View<unsigned long *> matrixView_type;
+typedef Kokkos::View<double *> matrixView_type;
+typedef matrixView_type::HostMirror host_matrix;
 
 using std::string;
 using std::vector;
@@ -184,12 +185,12 @@ private:
 struct KokkosFunctor {
 
   const unsigned int _matrixSize;
-  RowMajorMatrix * _leftMatrix;
-  ColMajorMatrix * _rightMatrix;
+  matrixView_type _leftMatrix;
+  matrixView_type _rightMatrix;
   matrixView_type  _resultMatrix;
 
-  KokkosFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
-              ColMajorMatrix * rightMatrix, matrixView_type  resultMatrix):
+  KokkosFunctor(const unsigned int matrixSize, matrixView_type leftMatrix,
+              matrixView_type rightMatrix, matrixView_type  resultMatrix):
               _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
               _resultMatrix(resultMatrix) {
 
@@ -203,8 +204,8 @@ struct KokkosFunctor {
     unsigned int col = elementIndex % _matrixSize;
 
     for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix(elementIndex) += _leftMatrix->operator()(row, dummy) *
-      _rightMatrix->operator()(dummy, col);
+      _resultMatrix(elementIndex) = _leftMatrix(col + dummy * _matrixSize) *
+      _rightMatrix(row + dummy * _matrixSize);
     }
   }
 
@@ -217,7 +218,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int matrixSize = 512 * 4;
+  const unsigned int matrixSize = 512 * 3;
   const unsigned int numberOfRepeats = 1;
 
   // we will repeat the computation for each of the numbers of threads
@@ -536,14 +537,33 @@ int main(int argc, char* argv[]) {
   // start timing
   tic = high_resolution_clock::now();
   matrixView_type finalResults;
-  //for (unsigned int repeatIndex = 0;
-       //repeatIndex < numberOfRepeats; ++repeatIndex) {
-    matrixView_type results("A", matrixSize*matrixSize);
+  for (unsigned int repeatIndex = 0;
+       repeatIndex < numberOfRepeats; ++repeatIndex) {
+    matrixView_type left("left", matrixSize*matrixSize);
+    matrixView_type right("right", matrixSize*matrixSize);
+    matrixView_type result("result", matrixSize*matrixSize);
 
-    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, &leftMatrix,
-    &rightMatrixCol, results));
-  //}
+    host_matrix h_left = Kokkos::create_mirror_view(left);
+    host_matrix h_right = Kokkos::create_mirror_view(right);
+    host_matrix h_result = Kokkos::create_mirror_view(result);
 
+    for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
+      h_left(index) = leftMatrix(index);
+      h_right(index) = rightMatrixCol(index);
+      h_result(index) = 0;
+    }
+
+    Kokkos::deep_copy(left, h_left);
+    Kokkos::deep_copy(right, h_right);
+    Kokkos::deep_copy(result, h_result);
+
+    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, left,
+    right, result));
+    Kokkos::fence();
+    Kokkos::deep_copy(h_result, result);
+
+
+  }
   // stop timing
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =
@@ -553,7 +573,7 @@ int main(int argc, char* argv[]) {
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += results(row*matrixSize + col);
+      kokkosCheckSum += h_result(row*matrixSize + col);
     }
   }
   sprintf(methodName, "naive kokkos");

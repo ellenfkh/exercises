@@ -22,6 +22,7 @@ else
   # compiler
   CC              := g++
   # cuda
+  # CUDA_PATH     ?= /opt
   CUDA_PATH       ?= /usr/local/cuda-6.5
   CUDA_LIB_PATH   ?= $(CUDA_PATH)/lib64/
   ifeq ($(OS_SIZE),32)
