@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int matrixSize = 512 * 3;
+  const unsigned int matrixSize = 512 * 2;
   const unsigned int numberOfRepeats = 1;
 
   // we will repeat the computation for each of the numbers of threads
@@ -561,8 +561,10 @@ int main(int argc, char* argv[]) {
     right, result));
     Kokkos::fence();
     Kokkos::deep_copy(h_result, result);
-
-
+    
+    for(unsigned index = 0; index < matrixSize * matrixSize; ++index){
+      resultMatrix(index) = h_result(index);
+    }
   }
   // stop timing
   toc = high_resolution_clock::now();
@@ -573,7 +575,7 @@ int main(int argc, char* argv[]) {
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += h_result(row*matrixSize + col);
+      kokkosCheckSum += resultMatrix(row*matrixSize + col);
     }
   }
   sprintf(methodName, "naive kokkos");
