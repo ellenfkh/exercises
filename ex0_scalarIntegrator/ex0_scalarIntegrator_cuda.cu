@@ -5,30 +5,10 @@
 
 #include "ex0_scalarIntegrator_cuda.cuh"
 
-__global__ void sum(double *toSum, unsigned int n)
-{
-  for(unsigned int i = 1; i < n; ++i)
-  {
-    toSum[0] += toSum[i];
-  }
-}
-
-__global__ void sumSection(double firstBound, unsigned long long chunkSize,
-                    double* partial, unsigned long long numberOfIntervals, double dx)
-{
-      int id = threadIdx.x;
-      unsigned long threadMax = min(numberOfIntervals, (id+1)*chunkSize);
-      for(unsigned long i = id*chunkSize; i < threadMax; ++i) {
-          const double evaluationPoint = firstBound + (double(i) + 0.5) * dx;
-          partial[id] += std::sin(evaluationPoint);
-      }
-      partial[id] *= dx;
-}
-
 __global__
 void
-cudaDoScalarIntegration_kernel(float* output, double bounds, unsigned long
-                              numberOfIntervals, double dx) {
+cudaDoScalarIntegration_kernel(double bounds, unsigned long
+                              numberOfIntervals, double dx, double *partial) {
   // block-wide reduction storage, size is determined by third kernel
   // launch argument (thing between <<< and >>>)
   extern __shared__ double contributions[];
@@ -47,37 +27,44 @@ cudaDoScalarIntegration_kernel(float* output, double bounds, unsigned long
     for(int i = 1; i < blockDim.x; ++i) {
       contributions[0] += contributions[i];
     }
-    atomicAdd(output, dx*contributions[0]);
+    partial[blockIdx.x] = contributions[0];
   }
 
 }
 
 void
 cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
-                        float * const output, double bounds,
+                        double * const output, double bounds,
                         unsigned long numberOfIntervals, double dx) {
 
   dim3 blockSize(numberOfThreadsPerBlock);
   dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1);
 
-  // allocate somewhere to put our result
-  float *dev_output;
-  cudaMalloc((void **) &dev_output, 1*sizeof(float));
-  cudaMemset(dev_output, 0, sizeof(float));
   // run the kernel
+
+  double *partialResults;
+  cudaMalloc((void **) &partialResults, gridSize.x * sizeof(double));
+  cudaMemset(partialResults, 0, sizeof(double));
+
   cudaDoScalarIntegration_kernel<<<gridSize,
     blockSize,
-    numberOfThreadsPerBlock*sizeof(float)>>>(dev_output, bounds,
-                                              numberOfIntervals, dx);
+    numberOfThreadsPerBlock*sizeof(double)>>>(bounds, numberOfIntervals, dx,
+                                              partialResults);
 
   // make sure that everything in flight has been completed
   cudaDeviceSynchronize();
-  // copy over the output
-  cudaMemcpy(output, dev_output, 1*sizeof(float), cudaMemcpyDeviceToHost);
 
+  double *h_partialResults[gridSize.x];
+  cudaMemcpy(h_partialResults, partialResults, sizeof(double) * gridSize.x,
+            cudaMemcpyDeviceToHost);
 
-  // clean up
-  cudaFree(dev_output);
+  double finalSum = 0;
+  for(int i = 0; i < gridSize.x; ++i) {
+    finalSum += h_partialResults[i];
+  }
+
+  *output = finalSum * dx;
+
 
 
   // TODO: you have to do stuff in here, the junk below is just to show syntax

@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e8;
+  const unsigned long numberOfIntervals = 1e4;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
