@@ -37,30 +37,30 @@ cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
                         double * const output, double bounds,
                         unsigned long numberOfIntervals, double dx) {
 
-  dim3 blockSize(numberOfThreadsPerBlock);
-  dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1);
+  
+  const unsigned int gridSize = (numberOfIntervals / numberOfThreadsPerBlock) + 1;
 
   // run the kernel
 
   double *partialResults;
-  cudaMalloc((void **) &partialResults, gridSize.x * sizeof(double));
+  cudaMalloc((void **) &partialResults, gridSize * sizeof(double));
   cudaMemset(partialResults, 0, sizeof(double));
 
   cudaDoScalarIntegration_kernel<<<gridSize,
-    blockSize,
+    numberOfThreadsPerBlock,
     numberOfThreadsPerBlock*sizeof(double)>>>(bounds, numberOfIntervals, dx,
                                               partialResults);
 
   // make sure that everything in flight has been completed
   cudaDeviceSynchronize();
 
-  double *h_partialResults[gridSize.x];
-  cudaMemcpy(h_partialResults, partialResults, sizeof(double) * gridSize.x,
+  double h_partialResults[gridSize];
+  cudaMemcpy(h_partialResults, partialResults, sizeof(double) * gridSize,
             cudaMemcpyDeviceToHost);
 
   double finalSum = 0;
-  for(int i = 0; i < gridSize.x; ++i) {
-    finalSum += h_partialResults[i];
+  for(unsigned int index = 0; index < gridSize; ++index) {
+    finalSum += h_partialResults[index];
   }
 
   *output = finalSum * dx;

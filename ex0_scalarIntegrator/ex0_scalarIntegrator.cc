@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e4;
+  const unsigned long numberOfIntervals = 1e6;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
-    float cudaIntegral = 0;
+    double cudaIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
     cudaDoScalarIntegration(numberOfThreadsPerBlock,
