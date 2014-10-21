@@ -672,7 +672,7 @@ int main(int argc, char* argv[]) {
     // ===============================================================
     // ********************** < do vanilla tiled> ********************
     // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-
+    resultMatrix.fill(0);
     double tiledElapsedTime = 0;
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
