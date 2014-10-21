@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e2;
+  const unsigned long numberOfIntervals = 1e8;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
@@ -308,8 +308,8 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
     cudaDoScalarIntegration(numberOfThreadsPerBlock,
-                            &cudaIntegral, bounds,
-                            numberOfIntervals, dx)
+                            &cudaIntegral, bounds[0],
+                            numberOfIntervals, dx);
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =
@@ -350,13 +350,7 @@ int main(int argc, char* argv[]) {
   // start timing
   tic = high_resolution_clock::now();
 
-<<<<<<< HEAD
-  const double kokkosIntegral = 0;
-
-  Kokkos::parallel_reduce(numberOfIntervals,kokkosFunctor(),kokkosIntegral);
-=======
   double kokkosIntegral = 0;
->>>>>>> 76a9fc8973d2db17911673ce63d2f2add646634e
 
   Kokkos::parallel_reduce(numberOfIntervals, KokkosFunctor(dx),kokkosIntegral);
 

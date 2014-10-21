@@ -27,7 +27,7 @@ __global__ void sumSection(double firstBound, unsigned long long chunkSize,
 
 __global__
 void
-cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
+cudaDoScalarIntegration_kernel(float* output, double bounds, unsigned long
                               numberOfIntervals, double dx) {
   // block-wide reduction storage, size is determined by third kernel
   // launch argument (thing between <<< and >>>)
@@ -36,8 +36,9 @@ cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
   unsigned int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
 
   if(myID < numberOfIntervals) {
-    contributions[threadIdx.x] = std::sin(bounds[0] +
-                                    (float(myID) + 0.5) * dx);
+    const double evaluationPoint =
+      bounds + (double(myID) + 0.5) * dx;
+    contributions[threadIdx.x] = std::sin(evaluationPoint);
   }
 
   __syncthreads();
@@ -46,23 +47,23 @@ cudaDoScalarIntegration_kernel(double* output, double * bounds, unsigned long
     for(int i = 1; i < blockDim.x; ++i) {
       contributions[0] += contributions[i];
     }
-    atomicAdd(output, contributions[0]);
+    atomicAdd(output, dx*contributions[0]);
   }
 
 }
 
 void
 cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
-                        float * const output, double * bounds,
+                        float * const output, double bounds,
                         unsigned long numberOfIntervals, double dx) {
 
   dim3 blockSize(numberOfThreadsPerBlock);
-  dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1)
+  dim3 gridSize((numberOfIntervals / numberOfThreadsPerBlock) + 1);
 
   // allocate somewhere to put our result
   float *dev_output;
   cudaMalloc((void **) &dev_output, 1*sizeof(float));
-  cudaMemset(dev_output, 0, sizeof(float))
+  cudaMemset(dev_output, 0, sizeof(float));
   // run the kernel
   cudaDoScalarIntegration_kernel<<<gridSize,
     blockSize,
