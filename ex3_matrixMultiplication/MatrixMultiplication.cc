@@ -656,8 +656,8 @@ int main(int argc, char* argv[]) {
   // ********************** < do tiled> ****************************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-  //const vector<unsigned int> tileSizes = {16, 32, 64};
-  const vector<unsigned int> tileSizes = {};
+  const vector<unsigned int> tileSizes = {16, 32, 64};
+  //const vector<unsigned int> tileSizes = {};
 
   for (const unsigned int tileSize : tileSizes) {
 
@@ -676,7 +676,19 @@ int main(int argc, char* argv[]) {
     double tiledElapsedTime = 0;
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
-      // TODO: do tiled matrix multiplication
+      for(unsigned int tileRow = 0; tileRow < matrixSize; tileRow += tileSize) {
+        for(unsigned int tileCol = 0; tileCol < matrixSize; tileCol += tileSize) {
+          for(unsigned int row = tileRow; row < tileRow + tileSize; ++row) {
+            for(unsigned int col = tileCol; col < tileCol + tileSize; ++col) {
+
+              for (unsigned int dummy = 0; dummy < tileSize; ++dummy) {
+                resultMatrix(row, col) +=
+                  leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
+              }
+            }
+          }
+        }
+      }
     }
     // check the answer
     double tiledCheckSum = 0;
