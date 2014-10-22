@@ -174,22 +174,28 @@ public:
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) const {
-    for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
-      for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
-         for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
 
-           for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
-             for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
-               for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
-                tiledResultMatrix[row*matrixSize + col] +=
-                  leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
-               }
-             }
-           }
-         }
+    unsigned int tilesPerRow = _matrixSize/_tileSize;
+
+    for(unsigned long i = range.begin(); i != range.end(); ++i) {
+
+    unsigned int resultRow = (i / tilesPerRow) * tileSize;
+    unsigned int resultCol = (i % tilesPerRow) * tileSize;
+    for(unsigned int dummyBlock = 0; dummyBlock < _matrixSize; dummyBlock += _tileSize) {
+
+      for(unsigned int row = resultRow; row < resultRow + _tileSize; ++row) {
+        for(unsigned int col = resultCol; col < resultCol + _tileSize; ++col) {
+          for (unsigned int dummy = dummyBlock; dummy < _tileSize + dummyBlock; ++dummy) {
+            _tiledResultMatrix->at(row*matrixSize + col) +=
+                  _tiledLeftMatrix->at(row, dummy) *
+                  _tiledRightMatrix->at(dummy, col);
+          }
+        }
       }
     }
+    }
   }
+
 
 private:
   TbbFunctorTiled();
@@ -681,8 +687,10 @@ int main(int argc, char* argv[]) {
                                     std::numeric_limits<double>::quiet_NaN());
     vector<double> tiledResultMatrix(matrixSize * matrixSize, 0);
 
-    // TODO: form left matrix
-    // TODO: form right matrix
+    for(unsigned int i = 0; i < matrixSize * matrixSize; ++i) {
+      tiledLeftMatrix[i] = leftMatrix(i);
+      tiledRightMatrix[i] = rightMatrixCol(i);
+    }
 
     // ===============================================================
     // ********************** < do vanilla tiled> ********************
@@ -753,8 +761,8 @@ int main(int argc, char* argv[]) {
       double tbbElapsedTime = 0;
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
-        parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize),
-                        tbbOutputter);
+        parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize/
+                        (tileSize*tileSize), tbbOutputter);
       }
 
       // check the answer
@@ -798,8 +806,8 @@ int main(int argc, char* argv[]) {
         #pragma omp parallel for
         for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
           #pragma omp parallel for
-          for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {  
-            #pragma omp parallel for 
+          for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
+            #pragma omp parallel for
 	    for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
                for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
 		 for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
