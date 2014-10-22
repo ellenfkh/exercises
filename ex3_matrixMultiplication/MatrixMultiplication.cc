@@ -174,7 +174,21 @@ public:
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) const {
-    // TODO: something!
+    for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
+      for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
+         for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
+
+           for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
+             for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
+               for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
+                tiledResultMatrix[row*matrixSize + col] +=
+                  leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
+               }
+             }
+           }
+         }
+      }
+    }
   }
 
 private:
@@ -739,7 +753,8 @@ int main(int argc, char* argv[]) {
       double tbbElapsedTime = 0;
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
-        // TODO: something!
+        parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize),
+                        tbbOutputter);
       }
 
       // check the answer
