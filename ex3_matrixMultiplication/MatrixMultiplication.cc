@@ -783,13 +783,12 @@ int main(int argc, char* argv[]) {
         #pragma omp parallel for
         for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
           #pragma omp parallel for
-          for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
-
-             for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
-
+          for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {  
+            #pragma omp parallel for 
+	    for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
                for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
-                 for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
-                   for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
+		 for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
+		   for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
                     tiledResultMatrix[row*matrixSize + col] +=
                       leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
                    }
