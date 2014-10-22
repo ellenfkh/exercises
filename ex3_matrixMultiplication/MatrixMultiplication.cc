@@ -187,8 +187,8 @@ public:
         for(unsigned int col = resultCol; col < resultCol + _tileSize; ++col) {
           for (unsigned int dummy = dummyBlock; dummy < _tileSize + dummyBlock; ++dummy) {
             _tiledResultMatrix->at(row*matrixSize + col) +=
-                  _tiledLeftMatrix->at(row, dummy) *
-                  _tiledRightMatrix->at(dummy, col);
+                  _tiledLeftMatrix->at(row * _matrixSize + dummy) *
+                  _tiledRightMatrix->at(dummy + col * _matrixSize);
           }
         }
       }
