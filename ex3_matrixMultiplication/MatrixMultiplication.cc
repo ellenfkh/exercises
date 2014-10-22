@@ -186,7 +186,7 @@ public:
       for(unsigned int row = resultRow; row < resultRow + _tileSize; ++row) {
         for(unsigned int col = resultCol; col < resultCol + _tileSize; ++col) {
           for (unsigned int dummy = dummyBlock; dummy < _tileSize + dummyBlock; ++dummy) {
-            _tiledResultMatrix->at(row*matrixSize + col) +=
+            _tiledResultMatrix->at(row*_matrixSize + col) +=
                   _tiledLeftMatrix->at(row * _matrixSize + dummy) *
                   _tiledRightMatrix->at(dummy + col * _matrixSize);
           }
@@ -762,7 +762,7 @@ int main(int argc, char* argv[]) {
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
         parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize/
-                        (tileSize*tileSize), tbbOutputter);
+						(tileSize*tileSize)), tbbFunctor);
       }
 
       // check the answer
