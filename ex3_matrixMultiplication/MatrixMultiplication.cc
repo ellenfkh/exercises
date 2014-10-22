@@ -179,8 +179,8 @@ public:
 
     for(unsigned long i = range.begin(); i != range.end(); ++i) {
 
-    unsigned int resultRow = (i / tilesPerRow) * tileSize;
-    unsigned int resultCol = (i % tilesPerRow) * tileSize;
+    unsigned int resultRow = (i / tilesPerRow) * _tileSize;
+    unsigned int resultCol = (i % tilesPerRow) * _tileSize;
     for(unsigned int dummyBlock = 0; dummyBlock < _matrixSize; dummyBlock += _tileSize) {
 
       for(unsigned int row = resultRow; row < resultRow + _tileSize; ++row) {
