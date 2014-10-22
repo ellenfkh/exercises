@@ -666,7 +666,7 @@ int main(int argc, char* argv[]) {
     vector<double> tiledRightMatrix(matrixSize * matrixSize,
                                     std::numeric_limits<double>::quiet_NaN());
     vector<double> tiledResultMatrix(matrixSize * matrixSize, 0);
-    
+
     // TODO: form left matrix
     // TODO: form right matrix
 
@@ -677,24 +677,24 @@ int main(int argc, char* argv[]) {
     double tiledElapsedTime = 0;
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
-      
+
       for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
         for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
-	  for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
-	    
-	    for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
-              for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
-                for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
+	         for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
+
+	           for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
+               for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
+                 for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
                   tiledResultMatrix[row*matrixSize + col] +=
                     leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
-                }
-              }
-	    }
-	  }
+                 }
+               }
+	           }
+	         }
         }
       }
     }
-  
+
     // check the answer
     double tiledCheckSum = 0;
     for (const double entry : tiledResultMatrix) {
@@ -711,7 +711,7 @@ int main(int argc, char* argv[]) {
       printf("%-38s : incorrect checksum %lf instead of %lf\n",
              methodName, tiledCheckSum, cacheUnfriendlyCheckSum);
     }
-  
+
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     // ********************** </do vanilla tiled> ********************
     // ===============================================================
@@ -780,7 +780,24 @@ int main(int argc, char* argv[]) {
       double ompElapsedTime = 0;
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
-        // TODO: something!
+        #pragma omp parallel for
+        for(unsigned int resultRow = 0; resultRow < matrixSize; resultRow += tileSize) {
+          #pragma omp parallel for
+          for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
+
+             for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
+
+               for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
+                 for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
+                   for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
+                    tiledResultMatrix[row*matrixSize + col] +=
+                      leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
+                   }
+                 }
+               }
+             }
+          }
+        }
       }
 
 
