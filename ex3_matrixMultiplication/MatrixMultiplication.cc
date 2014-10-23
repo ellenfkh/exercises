@@ -571,7 +571,7 @@ int main(int argc, char* argv[]) {
   Kokkos::deep_copy(right, h_right);
   Kokkos::deep_copy(result, h_result);
 
-  KokkosFunctor kokkosFunctor(matrixSize, left, right, result)
+  KokkosFunctor kokkosFunctor(matrixSize, left, right, result);
   // start timing
   tic = high_resolution_clock::now();
   matrixView_type finalResults;
