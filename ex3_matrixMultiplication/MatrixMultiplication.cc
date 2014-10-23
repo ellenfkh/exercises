@@ -126,7 +126,7 @@ public:
 
   const unsigned int _matrixSize;
   RowMajorMatrix * _leftMatrix;
-  ColMajorMatrix * _rightMatrix;
+  RowMajorMatrix * _rightMatrix;
   RowMajorMatrix * _resultMatrix;
 
   TbbFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
@@ -188,7 +188,7 @@ public:
           for (unsigned int dummy = dummyBlock; dummy < _tileSize + dummyBlock; ++dummy) {
             _tiledResultMatrix->at(row*_matrixSize + col) +=
                   _tiledLeftMatrix->at(row * _matrixSize + dummy) *
-                  _tiledRightMatrix->at(dummy + col * _matrixSize);
+                  _tiledRightMatrix->at(dummy * _matrixSize + col);
           }
         }
       }
@@ -371,7 +371,7 @@ int main(int argc, char* argv[]) {
     tbb::task_scheduler_init init(numberOfThreads);
 
     // prepare the tbb functor.
-    const TbbFunctor tbbFunctor(matrixSize, &leftMatrix, &rightMatrixCol,
+    const TbbFunctor tbbFunctor(matrixSize, &leftMatrix, &rightMatrixRow,
                   &resultMatrix);
 
     // start timing
@@ -442,7 +442,7 @@ int main(int argc, char* argv[]) {
 
         for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
           resultMatrix(i) += leftMatrix(row, dummy) *
-          rightMatrixCol(dummy, col);
+          rightMatrixRow(dummy, col);
         }
       }
     }
@@ -689,7 +689,7 @@ int main(int argc, char* argv[]) {
 
     for(unsigned int i = 0; i < matrixSize * matrixSize; ++i) {
       tiledLeftMatrix[i] = leftMatrix(i);
-      tiledRightMatrix[i] = rightMatrixCol(i);
+      tiledRightMatrix[i] = rightMatrixRow(i);
     }
 
     // ===============================================================
@@ -760,7 +760,7 @@ int main(int argc, char* argv[]) {
                                        &tiledRightMatrix,
                                        &tiledResultMatrix);
       tic = high_resolution_clock::now();
- 
+
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
         parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize/
@@ -812,12 +812,12 @@ int main(int argc, char* argv[]) {
           #pragma omp parallel for
           for(unsigned int resultCol = 0; resultCol < matrixSize; resultCol += tileSize) {
             #pragma omp parallel for
-	    for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
+	          for(unsigned int dummyBlock = 0; dummyBlock < matrixSize; dummyBlock += tileSize) {
                for(unsigned int row = resultRow; row < resultRow + tileSize; ++row) {
-		 for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
-		   for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
-                    tiledResultMatrix[row*matrixSize + col] +=
-                      leftMatrix(row, dummy) * rightMatrixCol(dummy, col);
+		               for(unsigned int col = resultCol; col < resultCol + tileSize; ++col) {
+		                   for (unsigned int dummy = dummyBlock; dummy < tileSize + dummyBlock; ++dummy) {
+                         tiledResultMatrix[row*matrixSize + col] +=
+                         leftMatrix(row, dummy) * rightMatrixRow(dummy, col);
                    }
                  }
                }
