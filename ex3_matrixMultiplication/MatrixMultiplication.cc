@@ -696,7 +696,7 @@ int main(int argc, char* argv[]) {
     // ********************** < do vanilla tiled> ********************
     // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
     resultMatrix.fill(0);
-    double tiledElapsedTime = 0;
+    tic = high_resolution_clock::now();
     for (unsigned int repeatIndex = 0;
          repeatIndex < numberOfRepeats; ++repeatIndex) {
 
@@ -716,7 +716,9 @@ int main(int argc, char* argv[]) {
         }
       }
     }
-
+    toc = high_resolution_clock::now();
+    const double tiledElapsedTime =
+      duration_cast<duration<double> >(toc - tic).count();
     // check the answer
     double tiledCheckSum = 0;
     for (const double entry : tiledResultMatrix) {
@@ -757,14 +759,16 @@ int main(int argc, char* argv[]) {
                                        &tiledLeftMatrix,
                                        &tiledRightMatrix,
                                        &tiledResultMatrix);
-
+      tic = high_resolution_clock::now();
       double tbbElapsedTime = 0;
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
         parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize/
 						(tileSize*tileSize)), tbbFunctor);
       }
-
+      toc = high_resolution_clock::now();
+      const double tbbElapsedTime =
+        duration_cast<duration<double> >(toc - tic).count();
       // check the answer
       double tbbCheckSum = 0;
       for (const double entry : tiledResultMatrix) {
@@ -800,7 +804,7 @@ int main(int argc, char* argv[]) {
 
       omp_set_num_threads(numberOfThreads);
 
-      double ompElapsedTime = 0;
+      tic = high_resolution_clock::now();
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
         #pragma omp parallel for
@@ -821,7 +825,9 @@ int main(int argc, char* argv[]) {
           }
         }
       }
-
+      toc = high_resolution_clock::now();
+      const double ompElapsedTime =
+        duration_cast<duration<double> >(toc - tic).count();
 
       double ompCheckSum = 0;
       for (const double entry : tiledResultMatrix) {
