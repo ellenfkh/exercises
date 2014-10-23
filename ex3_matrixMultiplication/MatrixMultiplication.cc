@@ -553,44 +553,45 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize();
 
   //printf("kokkos is running on %s\n", typeid(Kokkos::DefaultExecutionSpace).name());
+  matrixView_type left("left", matrixSize*matrixSize);
+  matrixView_type right("right", matrixSize*matrixSize);
+  matrixView_type result("result", matrixSize*matrixSize);
 
+  host_matrix h_left = Kokkos::create_mirror_view(left);
+  host_matrix h_right = Kokkos::create_mirror_view(right);
+  host_matrix h_result = Kokkos::create_mirror_view(result);
+
+  for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
+    h_left(index) = leftMatrix(index);
+    h_right(index) = rightMatrixRow(index);
+    h_result(index) = 0;
+  }
+
+  Kokkos::deep_copy(left, h_left);
+  Kokkos::deep_copy(right, h_right);
+  Kokkos::deep_copy(result, h_result);
+
+  KokkosFunctor kokkosFunctor(matrixSize, left, right, result)
   // start timing
   tic = high_resolution_clock::now();
   matrixView_type finalResults;
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
-    matrixView_type left("left", matrixSize*matrixSize);
-    matrixView_type right("right", matrixSize*matrixSize);
-    matrixView_type result("result", matrixSize*matrixSize);
 
-    host_matrix h_left = Kokkos::create_mirror_view(left);
-    host_matrix h_right = Kokkos::create_mirror_view(right);
-    host_matrix h_result = Kokkos::create_mirror_view(result);
-
-    for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
-      h_left(index) = leftMatrix(index);
-      h_right(index) = rightMatrixRow(index);
-      h_result(index) = 0;
-    }
-
-    Kokkos::deep_copy(left, h_left);
-    Kokkos::deep_copy(right, h_right);
-    Kokkos::deep_copy(result, h_result);
-
-    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, left,
-    right, result));
+    Kokkos::parallel_for(matrixSize*matrixSize, kokkosFunctor);
     Kokkos::fence();
-    Kokkos::deep_copy(h_result, result);
 
-    for(unsigned index = 0; index < matrixSize * matrixSize; ++index){
-      resultMatrix(index) = h_result(index);
-    }
   }
   // stop timing
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
 
+  Kokkos::deep_copy(h_result, result);
+
+  for(unsigned index = 0; index < matrixSize * matrixSize; ++index){
+    resultMatrix(index) = h_result(index);
+  }
   // check the answer
   double kokkosCheckSum = 0;
   for (unsigned int row = 0; row < matrixSize; ++row) {
