@@ -94,7 +94,7 @@ runKokkosTest(const unsigned int matrixSize,
       h_left(row, col) = leftMatrix[row * matrixSize + col];
       h_right(row, col) = rightMatrix[row * matrixSize + col];
       h_result(row, col) = 0;
-      h_warmpu(row, col) = 0;
+      h_warmup(row, col) = 0;
     }
   }
 
@@ -109,7 +109,7 @@ runKokkosTest(const unsigned int matrixSize,
   KokkosFunctor<DeviceType, KokkosLeftMatrix, KokkosRightMatrix> warmupFunctor
                                             (matrixSize, left, right, warmup);
 
-  Kokkos::parallel_for(matrixSize*matrixSize, warmup);
+  Kokkos::parallel_for(matrixSize*matrixSize, warmupFunctor);
 
   // start timing
   timespec tic;
@@ -150,7 +150,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int matrixSize = 512 * 4;
+  const unsigned int matrixSize = 512 * 3;
   const unsigned int numberOfRepeats = 1;
 
   printf("using a matrix size of %u\n", matrixSize);

@@ -130,7 +130,7 @@ public:
   RowMajorMatrix * _resultMatrix;
 
   TbbFunctor(const unsigned int matrixSize, RowMajorMatrix * leftMatrix,
-              ColMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix) :
+              RowMajorMatrix * rightMatrix, RowMajorMatrix * resultMatrix) :
     _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
     _resultMatrix(resultMatrix) {
   }
