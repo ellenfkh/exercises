@@ -86,9 +86,9 @@ runKokkosTest(const unsigned int matrixSize,
   // TODO: make a kokkos functor
 
   // (optional) warm up kokkos
-  KokkosLeftMatrix left("left", matrixSize*matrixSize);
-  KokkosRightMatrix right("right", matrixSize*matrixSize);
-  KokkosLeftMatrix result("result", matrixSize*matrixSize);
+  KokkosLeftMatrix left("left", matrixSize, matrixSize);
+  KokkosRightMatrix right("right", matrixSize, matrixSize);
+  KokkosLeftMatrix result("result", matrixSize, matrixSize);
 
   KokkosLeftMatrix_Host h_left = Kokkos::create_mirror_view(left);
   KokkosRightMatrix_Host h_right = Kokkos::create_mirror_view(right);
@@ -104,6 +104,7 @@ runKokkosTest(const unsigned int matrixSize,
   Kokkos::deep_copy(right, h_right);
   Kokkos::deep_copy(result, h_result);
 
+KokkosFunctor<DeviceType, KokkosLeftMatrix, KokkosRightMatrix> bob(matrixSize, left, right, result);
 
 
   // start timing
@@ -115,12 +116,10 @@ runKokkosTest(const unsigned int matrixSize,
 
     // (optional) copy left and right matrices to device?
 
+    Kokkos::parallel_for(matrixSize*matrixSize, bob);
     // TODO: do the multiplication with kokkos
     // TODO: wait for the multiplication to finish
-
     // (optional) copy result view back to host?
-    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, left,
-    right, result));
     Kokkos::fence();
     Kokkos::deep_copy(h_result, result);
   }
@@ -135,7 +134,7 @@ runKokkosTest(const unsigned int matrixSize,
   // TODO: do you need to copy result matrix to host?
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      checkSum += h_result(row, col)
+      checkSum += h_result(row, col);
     }
   }
   printf("checkSum is %lf\n", checkSum);
@@ -152,7 +151,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int matrixSize = 512 * 3;
+  const unsigned int matrixSize = 512 * 4;
   const unsigned int numberOfRepeats = 1;
 
   printf("using a matrix size of %u\n", matrixSize);

@@ -760,7 +760,7 @@ int main(int argc, char* argv[]) {
                                        &tiledRightMatrix,
                                        &tiledResultMatrix);
       tic = high_resolution_clock::now();
-      double tbbElapsedTime = 0;
+ 
       for (unsigned int repeatIndex = 0;
            repeatIndex < numberOfRepeats; ++repeatIndex) {
         parallel_for(tbb::blocked_range<size_t>(0, matrixSize*matrixSize/
