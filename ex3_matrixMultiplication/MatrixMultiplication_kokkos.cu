@@ -12,6 +12,8 @@
 
 using std::string;
 using std::vector;
+typedef Kokkos::View<double *> matrixView_type;
+typedef matrixView_type::HostMirror host_matrix;
 
 enum KokkosDeepCopyStyle {KokkosDoDeepCopiesEveryRepeat,
                           KokkosDontDoDeepCopiesEveryRepeat};
@@ -84,6 +86,25 @@ runKokkosTest(const unsigned int matrixSize,
   // TODO: make a kokkos functor
 
   // (optional) warm up kokkos
+  KokkosLeftMatrix left("left", matrixSize*matrixSize);
+  KokkosRightMatrix right("right", matrixSize*matrixSize);
+  KokkosLeftMatrix result("result", matrixSize*matrixSize);
+
+  KokkosLeftMatrix_Host h_left = Kokkos::create_mirror_view(left);
+  KokkosRightMatrix_Host h_right = Kokkos::create_mirror_view(right);
+  KokkosLeftMatrix_Host h_result = Kokkos::create_mirror_view(result);
+
+  for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
+    h_left(index/matrixSize, index%matrixSize) = leftMatrix[index];
+    h_right(index/matrixSize, index%matrixSize) = rightMatrix[index];
+    h_result(index/matrixSize, index%matrixSize) = 0;
+  }
+
+  Kokkos::deep_copy(left, h_left);
+  Kokkos::deep_copy(right, h_right);
+  Kokkos::deep_copy(result, h_result);
+
+
 
   // start timing
   timespec tic;
@@ -98,7 +119,10 @@ runKokkosTest(const unsigned int matrixSize,
     // TODO: wait for the multiplication to finish
 
     // (optional) copy result view back to host?
-
+    Kokkos::parallel_for(matrixSize*matrixSize, KokkosFunctor(matrixSize, left,
+    right, result));
+    Kokkos::fence();
+    Kokkos::deep_copy(h_result, result);
   }
 
   // stop timing
@@ -111,7 +135,7 @@ runKokkosTest(const unsigned int matrixSize,
   // TODO: do you need to copy result matrix to host?
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      //checkSum += // TODO: something
+      checkSum += h_result(row, col)
     }
   }
   printf("checkSum is %lf\n", checkSum);
