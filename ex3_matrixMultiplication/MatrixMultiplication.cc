@@ -162,6 +162,56 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
 
   case 1: {
     /*
+       GEMM parameters and their values.
+       (Note: It is assumed that the result needs to be transposed into row-major format.
+              Think of left and right input matrices as A(p x l) and B(p x r), respectively,
+              even though the indexing is ((C),L,P) and ((C),R,P). Due to BLAS formatting
+              assumptions, we are computing (A^T*B)^T = B^T*A.)
+       TRANSA   TRANS
+       TRANSB   NO_TRANS
+       M        #rows(B^T)                            = number of right fields
+       N        #cols(A)                              = number of left fields
+       K        #cols(B^T)                            = number of integration points * size of tensor
+       ALPHA    1.0
+       A        right data for cell cl                = &rightFields[cl*skipR]
+       LDA      #rows(B)                              = number of integration points * size of tensor
+       B        left data for cell cl                 = &leftFields[cl*skipL]
+       LDB      #rows(A)                              = number of integration points * size of tensor
+       BETA     0.0
+       C        result for cell cl                    = &outputFields[cl*skipOp]
+       LDC      #rows(C)                              = number of right fields
+      */
+      int numData  = numPoints*dim1Tensor*dim2Tensor;
+      int skipL    = numLeftFields*numData;         // size of the left data chunk per cell
+      int skipR    = numRightFields*numData;        // size of the right data chunk per cell
+      int skipOp   = numLeftFields*numRightFields;  // size of the output data chunk per cell
+      Scalar alpha(1.0);                            // these are left unchanged by GEMM
+      Scalar beta(0.0);
+      if (sumInto) {
+        beta = 1.0;
+      }
+
+      for (int cl=0; cl < numCells; cl++) {
+        /* Use this if data is used in row-major format */
+        Teuchos::BLAS<int, Scalar> myblas;
+        myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
+                    numRightFields, numLeftFields, numData,
+                    alpha, &rightFields[cl*skipR], numData,
+                    &leftFields[cl*skipL], numData,
+                    beta, &outputFields[cl*skipOp], numRightFields);
+        /* Use this if data is used in column-major format */
+        /*
+        myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
+                    numLeftFields, numRightFields, numData,
+                    alpha, &leftFields[cl*skipL], numData,
+                    &rightFields[cl*skipR], numData,
+                    beta, &outputFields[cl*skipOp], numLeftFields);
+        */
+      }
+    }
+    break;
+  case 2: {
+    /*
     typedef Kokkos::View<Scalar*****> input_view_t;
     typedef Kokkos::View<Scalar***> output_view_t;
 
@@ -231,6 +281,9 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     Kokkos::finalize();
     */
   }
+  break;
+
+
   }
 }
 
@@ -245,7 +298,7 @@ int main(int argc, char* argv[]) {
   FieldContainer<double> in_c_r_p_d_d(c, r, p, d1, d2);
   FieldContainer<double> out1_c_l_r(c, l, r);
   FieldContainer<double> out2_c_l_r(c, l, r);
-
+  double zero = INTREPID_TOL*10000.0;
 
   // fill with random numbers
   for (int i=0; i<in_c_l_p_d_d.size(); i++) {
@@ -254,8 +307,30 @@ int main(int argc, char* argv[]) {
   for (int i=0; i<in_c_r_p_d_d.size(); i++) {
     in_c_r_p_d_d[i] = Teuchos::ScalarTraits<double>::random();
   }
+
+
+
+ contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+ contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 1);
+
+
+  /* I got rid of the typedefs - for now
+   * 0 -> manual computation
+   * 1 -> blas
+   * 2 -> kokkos
+   */
+   rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+   if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), NORM_ONE) > zero) {
+      std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_BLAS; "
+      << " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), NORM_ONE) << "\n\n";
+   }
+   else {
+     std::cout << "Cpp and blas get same result" << std::endl;
+   }
+
+
   contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
-  //contractFieldFieldTensor<double>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, COMP_BLAS);
+  contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 1);
 
   /*
   Kokkos::initialize();
