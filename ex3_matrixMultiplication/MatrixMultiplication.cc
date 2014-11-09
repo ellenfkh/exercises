@@ -38,6 +38,12 @@
 #include "Teuchos_Array.hpp"
 #include "Intrepid_ArrayTools.hpp"
 #include "Intrepid_FieldContainer.hpp"
+#include "Intrepid_RealSpaceTools.hpp"
+#include "Teuchos_oblackholestream.hpp"
+#include "Teuchos_RCP.hpp"
+#include "Teuchos_ScalarTraits.hpp"
+#include "Teuchos_GlobalMPISession.hpp"
+
 
 using std::string;
 using std::vector;
@@ -118,10 +124,11 @@ struct ContractFieldFieldTensorFunctor {
   }
 };
 */
-void ArrayTools::contractFieldFieldTensor(FieldContainer &            outputFields,
-                                          const FieldContainer &   leftFields,
-                                          const FieldContainer &  rightFields,
-                                          const int           compEngine) {
+
+void contractFieldFieldTensor(FieldContainer<double> & outputFields,
+			      const FieldContainer<double> &   leftFields,
+			      const FieldContainer<double> &  rightFields,
+                              const int compEngine) {
 
   // get sizes
   int numCells        = leftFields.dimension(0);
@@ -136,7 +143,7 @@ void ArrayTools::contractFieldFieldTensor(FieldContainer &            outputFiel
         for (int cl = 0; cl < numCells; cl++) {
 	        for (int lbf = 0; lbf < numLeftFields; lbf++) {
 	          for (int rbf = 0; rbf < numRightFields; rbf++) {
-	          Scalar tmpVal(0);
+	          double tmpVal = 0;
 	            for (int qp = 0; qp < numPoints; qp++) {
 	              for (int iTens1 = 0; iTens1 < dim1Tensor; iTens1++) {
 		              for (int iTens2 = 0; iTens2 < dim2Tensor; iTens2++) {
@@ -224,7 +231,8 @@ void ArrayTools::contractFieldFieldTensor(FieldContainer &            outputFiel
     Kokkos::finalize();
     */
   }
-} // end contractFieldFieldTensor
+  }
+}
 
 int main(int argc, char* argv[]) {
 
@@ -246,7 +254,7 @@ int main(int argc, char* argv[]) {
   for (int i=0; i<in_c_r_p_d_d.size(); i++) {
     in_c_r_p_d_d[i] = Teuchos::ScalarTraits<double>::random();
   }
-  contractFieldFieldTensor<double>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
   //contractFieldFieldTensor<double>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, COMP_BLAS);
 
   /*
