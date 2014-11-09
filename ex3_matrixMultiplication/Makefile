@@ -58,8 +58,8 @@ CC_INCLUDE        += -I$(EIGEN_DIR)
 CC_INCLUDE        += -I$(TBB_DIR)/include
 
 # I'm adding the linking to trilinos here this may be wrong
-LD_FLAGS += -I/clinic/2014/sandia14/trilinos-11.10.2-Source/packages/intrepid/src/Shared
-
+CC_INCLUDE += -I/clinic/2014/sandia14/trilinos-11.10.2-Source/packages/intrepid/src/Shared
+LD_FLAGS += -L/clinic/2014/sandia14/trilinos-install/lib/ -lteuchoscore
 # OS-architecture specific flags
 ifeq ($(OS_SIZE),32)
       NVCC_FLAGS += -m32

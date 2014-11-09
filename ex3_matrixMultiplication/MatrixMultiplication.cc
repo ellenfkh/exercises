@@ -35,19 +35,9 @@
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
-
-// Include for fieldContainer *fingers crossed*
 #include "Teuchos_Array.hpp"
 #include "Intrepid_ArrayTools.hpp"
 #include "Intrepid_FieldContainer.hpp"
-#include "Intrepid_RealSpaceTools.hpp"
-#include "Teuchos_oblackholestream.hpp"
-#include "Teuchos_RCP.hpp"
-#include "Teuchos_ScalarTraits.hpp"
-#include "Teuchos_GlobalMPISession.hpp"
-
-typedef Kokkos::View<double *> matrixView_type;
-typedef matrixView_type::HostMirror host_matrix;
 
 using std::string;
 using std::vector;
@@ -55,174 +45,225 @@ using std::array;
 using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
+/*
+template<class Scalar, class LeftViewType, class RightViewType, class OutputViewType>
+struct ContractFieldFieldTensorFunctor {
+  LeftViewType _leftFields;
+  RightViewType _rightFields;
+  OutputViewType _outputFields;
+  int _numLeftFields;
+  int _numRightFields;
+  int _numPoints;
+  int _dim1Tensor;
+  int _dim2Tensor;
+  bool _sumInto;
 
-struct KokkosFunctor {
-
-  const unsigned int _matrixSize;
-  matrixView_type _leftMatrix;
-  matrixView_type _rightMatrix;
-  matrixView_type  _resultMatrix;
-
-  KokkosFunctor(const unsigned int matrixSize, matrixView_type leftMatrix,
-              matrixView_type rightMatrix, matrixView_type  resultMatrix):
-              _matrixSize(matrixSize), _leftMatrix(leftMatrix), _rightMatrix(rightMatrix),
-              _resultMatrix(resultMatrix) {
-
-              }
-
+  ContractFieldFieldTensorFunctor(
+				  LeftViewType leftFields,
+				  RightViewType rightFields,
+				  OutputViewType outputFields,
+				  int numLeftFields,
+				  int numRightFields,
+				  int numPoints,
+				  int dim1Tensor,
+				  int dim2Tensor,
+				  bool sumInto) :
+    _leftFields(leftFields),
+    _rightFields(rightFields),
+    _outputFields(outputFields),
+    _numLeftFields(numLeftFields),
+    _numRightFields(numRightFields),
+    _numPoints(numPoints),
+    _dim1Tensor(dim1Tensor),
+    _dim2Tensor(dim2Tensor),
+    _sumInto(sumInto)
+  {
+    // Nothing to do                                                                                                                                          
+  }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
-
-    unsigned int row = elementIndex / _matrixSize;
-    unsigned int col = elementIndex % _matrixSize;
-
-    for(unsigned int dummy = 0; dummy < _matrixSize; ++dummy) {
-      _resultMatrix(elementIndex) += _leftMatrix(dummy + row * _matrixSize) *
-      _rightMatrix(col + dummy * _matrixSize);
+    if (_sumInto) {
+      for (int lbf = 0; lbf < _numLeftFields; lbf++) {
+        for (int rbf = 0; rbf < _numRightFields; rbf++) {
+          Scalar tmpVal(0);
+          for (int qp = 0; qp < _numPoints; qp++) {
+            for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
+              for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
+                tmpVal += _leftFields(elementIndex, lbf, qp, iTens1, iTens2)*_rightFields(elementIndex, rbf, qp, iTens1, iTens2);
+	      } // D2-loop                                                                                                                                   
+            } // D1-loop                                                                                                                                     
+          } // P-loop                                                                                                                                        
+          _outputFields(elementIndex, lbf, rbf) += tmpVal;
+        } // R-loop                                                                                                                                          
+      } // L-loop                                                                                                                                            
+    }
+    else {
+      for (int lbf = 0; lbf < _numLeftFields; lbf++) {
+        for (int rbf = 0; rbf < _numRightFields; rbf++) {
+          Scalar tmpVal(0);
+          for (int qp = 0; qp < _numPoints; qp++) {
+            for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
+              for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
+                tmpVal += _leftFields(elementIndex, lbf, qp, iTens1, iTens2)*_rightFields(elementIndex, rbf, qp, iTens1, iTens2);
+              } // D2-loop                                                                                                                                   
+            } // D1-loop                                                                                                                                     
+          } // P-loop                                                                                                                                        
+          _outputFields(elementIndex, lbf, rbf) = tmpVal;
+        } // R-loop
+      } // L-loop                                                                                                                                           
     }
   }
-
-private:
-  KokkosFunctor();
-
 };
 
+void ArrayTools::contractFieldFieldTensor(ArrayOutFields &            outputFields,
+                                          const ArrayInFieldsLeft &   leftFields,
+                                          const ArrayInFieldsRight &  rightFields,
+                                          const ECompEngine           compEngine,
+                                          const bool                  sumInto) {
+
+  // get sizes                                                                                                                                                
+  int numCells        = leftFields.dimension(0);
+  int numLeftFields   = leftFields.dimension(1);
+  int numRightFields  = rightFields.dimension(1);
+  int numPoints       = leftFields.dimension(2);
+  int dim1Tensor      = leftFields.dimension(3);
+  int dim2Tensor      = leftFields.dimension(4);
+
+  switch(compEngine) {
+  case COMP_CPP: {
+    if (sumInto) {
+      for (int cl = 0; cl < numCells; cl++) {
+	for (int lbf = 0; lbf < numLeftFields; lbf++) {
+	  for (int rbf = 0; rbf < numRightFields; rbf++) {
+	    Scalar tmpVal(0);
+	    for (int qp = 0; qp < numPoints; qp++) {
+	      for (int iTens1 = 0; iTens1 < dim1Tensor; iTens1++) {
+		for (int iTens2 = 0; iTens2 < dim2Tensor; iTens2++) {
+		  tmpVal += leftFields(cl, lbf, qp, iTens1, iTens2)*rightFields(cl, rbf, qp, iTens1, iTens2);
+		} // D2-loop                                                                                                                                
+	      } // D1-loop                                                                                                                                  
+	    } // P-loop                                                                                                                                     
+	    outputFields(cl, lbf, rbf) += tmpVal;
+	  } // R-loop                                                                                                                                       
+	} // L-loop                                                                                                                                         
+      } // C-loop                                                                                                                                           
+    }
+    else {
+      for (int cl = 0; cl < numCells; cl++) {
+	for (int lbf = 0; lbf < numLeftFields; lbf++) {
+	  for (int rbf = 0; rbf < numRightFields; rbf++) {
+	    Scalar tmpVal(0);
+	    for (int qp = 0; qp < numPoints; qp++) {
+	      for (int iTens1 = 0; iTens1 < dim1Tensor; iTens1++) {
+		for (int iTens2 = 0; iTens2 < dim2Tensor; iTens2++) {
+		  tmpVal += leftFields(cl, lbf, qp, iTens1, iTens2)*rightFields(cl, rbf, qp, iTens1, iTens2);
+		} // D2-loop                                                                                                                                
+	      } // D1-loop                                                     
+	    } // P-loop                                                                                                                                     
+	    outputFields(cl, lbf, rbf) = tmpVal;
+	  } // R-loop                                                                                                                                       
+	} // L-loop                                                                                                                                         
+      } // C-loop                                                                                                                                           
+    }
+  }
+    break;
+
+  case COMP_KOKKOS: {
+
+    typedef Kokkos::View<Scalar*****> input_view_t;
+    typedef Kokkos::View<Scalar***> output_view_t;
+
+    typedef typename input_view_t::HostMirror input_host_t;
+    typedef typename output_view_t::HostMirror output_host_t;
+
+    Kokkos::initialize();
+
+    input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
+    input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
+    output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
+
+    input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
+    input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
+    output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
+
+    // Copy everything                                                                                                                                      
+    for (int cl = 0; cl < numCells; ++cl) {
+      for (int lbf = 0; lbf < numLeftFields; ++lbf) {
+	for (int qp = 0; qp < numPoints; ++qp) {
+	  for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
+	    for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
+	      hostLeft(cl, lbf, qp, iTens1, iTens2) = leftFields(cl, lbf, qp, iTens1, iTens2);
+	    }
+	  }
+	}
+      }
+      for (int rbf = 0; rbf < numRightFields; ++rbf) {
+	for (int qp = 0; qp < numPoints; ++qp) {
+	  for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
+	    for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
+	      hostRight(cl, rbf, qp, iTens1, iTens2) = rightFields(cl, rbf, qp, iTens1, iTens2);
+	    }
+	  }
+	}
+      }
+      for (int lbf = 0; lbf < numLeftFields; ++lbf) {
+	for (int rbf = 0; rbf < numRightFields; ++rbf) {
+	  hostOut(cl, lbf, rbf) = outputFields(cl, lbf, rbf);
+	}
+      }
+    }
+
+    Kokkos::deep_copy(kokkosLeft, hostLeft);
+    Kokkos::deep_copy(kokkosRight, hostRight);
+    Kokkos::deep_copy(kokkosOut, hostOut);
+
+    ContractFieldFieldTensorFunctor<Scalar, input_view_t, input_view_t, output_view_t>
+      kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
+		    numLeftFields, numRightFields, numPoints,
+		    dim1Tensor, dim2Tensor, sumInto);
+    Kokkos::parallel_for(numCells, kokkosFunctor);
+
+    Kokkos::fence();
+
+    Kokkos::deep_copy(hostOut, kokkosOut);
+
+    for (int cl = 0; cl < numCells; ++cl) {
+      for (int lbf = 0; lbf < numLeftFields; ++lbf) {
+	for (int rbf = 0; rbf < numRightFields; ++rbf) {
+	  outputFields(cl, lbf, rbf) = hostOut(cl, lbf, rbf);
+	}
+      }
+    }
+    Kokkos::finalize();
+  }
+} // end contractFieldFieldTensor
+*/    
 int main(int argc, char* argv[]) {
-
-  // a couple of inputs.  change the numberOfIntervals to control the amount
-  //  of work done
-  
-  // ===============================================================
-  // ********************** < do naive openmp> *********************
-  // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-
-  /*
-  // for each number of threads
-  for (const unsigned int numberOfThreads :
-         numberOfThreadsArray) {
-
-    // set the number of threads for openmp
-    omp_set_num_threads(numberOfThreads);
-
-    // start timing
-    tic = high_resolution_clock::now();
-
-    for (unsigned int repeatIndex = 0;
-         repeatIndex < numberOfRepeats; ++repeatIndex) {
-      resultMatrix.fill(0);
-
-      #pragma omp parallel for
-      for(unsigned int i = 0; i < matrixSize*matrixSize; ++i) {
-        unsigned int row = i / matrixSize;
-        unsigned int col = i % matrixSize;
-
-        for(unsigned int dummy = 0; dummy < matrixSize; ++dummy) {
-          resultMatrix(i) += leftMatrix(row, dummy) *
-          rightMatrixRow(dummy, col);
-        }
-      }
-    }
-
-    // stop timing
-    toc = high_resolution_clock::now();
-    const double ompElapsedTime =
-      duration_cast<duration<double> >(toc - tic).count();
-
-    // check the answer
-    double ompCheckSum = 0;
-    for (unsigned int row = 0; row < matrixSize; ++row) {
-      for (unsigned int col = 0; col < matrixSize; ++col) {
-        ompCheckSum += resultMatrix(row, col);
-      }
-    }
-    sprintf(methodName, "naive omp, %3u threads", numberOfThreads);
-    if (std::abs(cacheUnfriendlyCheckSum - ompCheckSum) / cacheUnfriendlyCheckSum < 1e-3) {
-      printf("%-38s : time %6.2f speedup w.r.t. unfriendly %6.2f, w.r.t. friendly %6.2f (%%%5.1f of ideal)\n",
-             methodName,
-             ompElapsedTime,
-             cacheUnfriendlyElapsedTime / ompElapsedTime,
-             cacheFriendlyElapsedTime / ompElapsedTime,
-             100. * cacheFriendlyElapsedTime / ompElapsedTime / numberOfThreads);
-    } else {
-      printf("%-38s : incorrect checksum %lf instead of %lf\n",
-             methodName, ompCheckSum, cacheUnfriendlyCheckSum);
-    }
-  }
-  */
-  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  // ********************** </do naive openmp> *********************
-  // ===============================================================
-
-  // ===============================================================
-  // ********************** < do cuda> *****************************
-  // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-  /*
-  // we will repeat the computation for each of the numbers of threads
-  const vector<unsigned int> threadsPerBlockArray = {256};
-  const vector<unsigned int> maxNumberOfBlocksArray = {10000};
-
-  // warm up cuda
-  {
-    const unsigned int warmUpMaxNumberOfBlocks = 1e4;
-    const unsigned int warmUpThreadsPerBlock   = 256;
-    cudaDoMatrixMultiplication(warmUpMaxNumberOfBlocks,
-                               warmUpThreadsPerBlock,
-                               matrixSize);
-  }
-
-  // for each max number of blocks
-  for (const unsigned int maxNumberOfBlocks :
-         maxNumberOfBlocksArray) {
-    // for each number of threads per block
-    for (const unsigned int numberOfThreadsPerBlock :
-           threadsPerBlockArray) {
-
-      // start timing
-      tic = high_resolution_clock::now();
-
-      // do calculation with cuda for this number of threads per block
-      for (unsigned int repeatIndex = 0;
-           repeatIndex < numberOfRepeats; ++repeatIndex) {
-        cudaDoMatrixMultiplication(maxNumberOfBlocks,
-                                   numberOfThreadsPerBlock,
-                                   matrixSize);
-      }
-
-      // stop timing
-      toc = high_resolution_clock::now();
-      const double cudaElapsedTime =
-        duration_cast<duration<double> >(toc - tic).count();
-
-      // check the answer
-      double cudaCheckSum = 0;
-      for (unsigned int row = 0; row < matrixSize; ++row) {
-        for (unsigned int col = 0; col < matrixSize; ++col) {
-          cudaCheckSum += resultMatrix(row, col);
-        }
-      }
-      sprintf(methodName, "naive cuda %8.2e blocks %3u threads", double(maxNumberOfBlocks), numberOfThreadsPerBlock);
-      if (std::abs(cacheUnfriendlyCheckSum - cudaCheckSum) / cacheUnfriendlyCheckSum < 1e-3) {
-        printf("%-38s : time %6.2f speedup w.r.t. unfriendly %6.2f, w.r.t. friendly %6.2f\n",
-               methodName,
-               cudaElapsedTime,
-               cacheUnfriendlyElapsedTime / cudaElapsedTime,
-               cacheFriendlyElapsedTime / cudaElapsedTime);
-      } else {
-        printf("%-38s : incorrect checksum %lf instead of %lf\n",
-               methodName, cudaCheckSum, cacheUnfriendlyCheckSum);
-      }
-    }
-  }
-  */
-  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  // ********************** </do cuda> *****************************
-  // ===============================================================
 
   // ===============================================================
   // ********************** < do kokkos> ***************************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-  /*
+  int c=5, p=9, l=3, r=7, d1=13, d2=5;                                                                                                                    
+
+  Intrepid::FieldContainer<double> in_c_l_p_d_d(c, l, p, d1, d2);                                                                                           
+  Intrepid::FieldContainer<double> in_c_r_p_d_d(c, r, p, d1, d2);                                                                                            
+  Intrepid::FieldContainer<double> out1_c_l_r(c, l, r);                                                                                                     
+  Intrepid::FieldContainer<double> out2_c_l_r(c, l, r);                                                                                                      
+                                                                                                                      
+  
+  // fill with random numbers                                                                                                                             
+  for (int i=0; i<in_c_l_p_d_d.size(); i++) {                                                                                                             
+    in_c_l_p_d_d[i] = Teuchos::ScalarTraits<double>::random();                                                                                            
+  }                                                                                                                                                       
+  for (int i=0; i<in_c_r_p_d_d.size(); i++) {                                                                                                             
+    in_c_r_p_d_d[i] = Teuchos::ScalarTraits<double>::random();                                                                                            
+  }                                                                                                                                                       
+  /*                                                                                                                                                          
+  art::contractFieldFieldTensor<double>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, COMP_CPP);                                                                
+  art::contractFieldFieldTensor<double>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, COMP_BLAS);
+
+  
   Kokkos::initialize();
 
   //printf("kokkos is running on %s\n", typeid(Kokkos::DefaultExecutionSpace).name());
