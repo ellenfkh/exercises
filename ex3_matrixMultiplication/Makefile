@@ -57,12 +57,16 @@ CC_INCLUDE        += -I$(EIGEN_DIR)
 # tbb
 CC_INCLUDE        += -I$(TBB_DIR)/include
 
+# I'm adding the linking to trilinos here this may be wrong
+LD_FLAGS += -I/clinic/2014/sandia14/trilinos-11.10.2-Source/packages/intrepid/src/Shared
+
 # OS-architecture specific flags
 ifeq ($(OS_SIZE),32)
       NVCC_FLAGS += -m32
 else
       NVCC_FLAGS += -m64
 endif
+
 
 CUDA_INC_PATH   ?= $(CUDA_PATH)/include
 CUDA_BIN_PATH   ?= $(CUDA_PATH)/bin
