@@ -115,7 +115,7 @@ struct ContractFieldFieldTensorFunctor {
     }
   }
 };
-
+*/
 void ArrayTools::contractFieldFieldTensor(ArrayOutFields &            outputFields,
                                           const ArrayInFieldsLeft &   leftFields,
                                           const ArrayInFieldsRight &  rightFields,
@@ -170,7 +170,7 @@ void ArrayTools::contractFieldFieldTensor(ArrayOutFields &            outputFiel
     break;
 
   case COMP_KOKKOS: {
-
+    /*
     typedef Kokkos::View<Scalar*****> input_view_t;
     typedef Kokkos::View<Scalar***> output_view_t;
 
@@ -236,6 +236,7 @@ void ArrayTools::contractFieldFieldTensor(ArrayOutFields &            outputFiel
       }
     }
     Kokkos::finalize();
+    */
   }
 } // end contractFieldFieldTensor
 */    
