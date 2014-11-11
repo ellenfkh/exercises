@@ -33,14 +33,9 @@ using Intrepid::FieldContainer;
 
 typedef Intrepid::RealSpaceTools<double> rst;
 
-typedef Kokkos::View<double *****> input_view_t;
-typedef Kokkos::View<double ***> output_view_t;
-
-typedef input_view_t::HostMirror input_host_t;
-typedef output_view_t::HostMirror output_host_t;
-
-template<class LeftViewType, class RightViewType, class OutputViewType>
+template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
 struct ContractFieldFieldTensorFunctor {
+  typedef DeviceType device_type;
   LeftViewType _leftFields;
   RightViewType _rightFields;
   OutputViewType _outputFields;
@@ -90,10 +85,18 @@ struct ContractFieldFieldTensorFunctor {
 };
 
 
+template <class DeviceType>
 void contractFieldFieldTensor(FieldContainer<double> & outputFields,
 			      const FieldContainer<double> &   leftFields,
 			      const FieldContainer<double> &  rightFields,
                               const int compEngine) {
+
+  typedef Kokkos::View<double *****, DeviceType> input_view_t;
+  typedef Kokkos::View<double ***, DeviceType> output_view_t;
+
+  typedef typename input_view_t::HostMirror input_host_t;
+  typedef typename output_view_t::HostMirror output_host_t;
+
 
   // get sizes
   int numCells        = leftFields.dimension(0);
@@ -182,16 +185,16 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     Kokkos::initialize();
 
     input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
-    
+
     input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
     output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
-    
+
     input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
     input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
     output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
-    
+
     hostRight(1,1,1,1,1) = 5;
-    
+
     // Copy everything
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
@@ -224,13 +227,13 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     Kokkos::deep_copy(kokkosLeft, hostLeft);
     Kokkos::deep_copy(kokkosRight, hostRight);
     Kokkos::deep_copy(kokkosOut, hostOut);
-    
-    ContractFieldFieldTensorFunctor<input_view_t, input_view_t, output_view_t>
+
+    ContractFieldFieldTensorFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
       kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
 		    numLeftFields, numRightFields, numPoints,
 		    dim1Tensor, dim2Tensor);
     Kokkos::parallel_for(numCells, kokkosFunctor);
-    
+
     Kokkos::fence();
 
     Kokkos::deep_copy(hostOut, kokkosOut);
@@ -244,7 +247,7 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     }
     */
     Kokkos::finalize();
-    
+
   }
   break;
 
@@ -275,9 +278,15 @@ int main(int argc, char* argv[]) {
 
 
 
- contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
- contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
- 
+  printf("trying kokkos openmp 0\n");
+ contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  printf("trying kokkos openmp 2\n");
+ contractFieldFieldTensor<Kokkos::OpenMP>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  printf("trying kokkos cuda 0\n");
+ contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  printf("trying kokkos cuda 2\n");
+ contractFieldFieldTensor<Kokkos::Cuda>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+
 
   /* I got rid of the typedefs - for now
    * 0 -> manual computation
