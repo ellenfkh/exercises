@@ -79,14 +79,8 @@ TARGETS = MatrixMultiplication MatrixMultiplication_kokkos
 
 all: $(TARGETS)
 
-MatrixMultiplication_kokkos: MatrixMultiplication_kokkos.cu
-	$(NVCC) -ccbin=$(NVCCSCC) $(NVCC_FLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) $(NVCC_INCLUDE) -o $@ $< -Xcompiler -fopenmp $(NVCC_LD_FLAGS)
-
-MatrixMultiplication_cuda.o: MatrixMultiplication_cuda.cu
-	$(NVCC) -ccbin=$(NVCCSCC) $(NVCC_FLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) $(NVCC_INCLUDE) -o $@ -c $<
-
-MatrixMultiplication: MatrixMultiplication.cc MatrixMultiplication_cuda.o
-	$(CC) $< -o $@ MatrixMultiplication_cuda.o -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
+MatrixMultiplication: MatrixMultiplication.cu
+	$(NVCC) -ccbin=$(NVCCSCC) $(NVCC_FLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) $(NVCC_INCLUDE) -o $@ $< -L/clinic/2014/sandia14/trilinos-install/lib -lkokkoscore -lhwloc -lgomp -lcudart -lcublas -lteuchoscore
 
 
 clean:

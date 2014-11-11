@@ -7,9 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
-#include <array>
 #include <string>
-#include <chrono>
 #include <algorithm>
 
 // yucky, but for asking the system how many cores we have
@@ -17,21 +15,6 @@
 
 // header file for openmp
 #include <omp.h>
-
-// header files for tbb
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_reduce.h>
-#include <tbb/parallel_for.h>
-#include <tbb/task_scheduler_init.h>
-
-// header files for cuda implementation
-#include "MatrixMultiplication_cuda.cuh"
-
-// header files for eigen
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
-#include <Eigen/Core>
-#pragma GCC diagnostic pop
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
@@ -43,19 +26,15 @@
 #include "Teuchos_RCP.hpp"
 #include "Teuchos_ScalarTraits.hpp"
 #include "Teuchos_GlobalMPISession.hpp"
-    
+
 using std::string;
 using std::vector;
-using std::array;
-using std::chrono::high_resolution_clock;
-using std::chrono::duration;
-using std::chrono::duration_cast;
 using Intrepid::FieldContainer;
 
 typedef Intrepid::RealSpaceTools<double> rst;
 
-typedef Kokkos::View<double*****> input_view_t;
-typedef Kokkos::View<double***, Kokkos::LayoutRight> output_view_t;
+typedef Kokkos::View<double *****> input_view_t;
+typedef Kokkos::View<double ***> output_view_t;
 
 typedef input_view_t::HostMirror input_host_t;
 typedef output_view_t::HostMirror output_host_t;
@@ -93,7 +72,7 @@ struct ContractFieldFieldTensorFunctor {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
-  
+
     for (int lbf = 0; lbf < _numLeftFields; lbf++) {
       for (int rbf = 0; rbf < _numRightFields; rbf++) {
       double tmpVal = 0;
@@ -178,7 +157,7 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
       double  beta = 0.0;
 
       for (int cl=0; cl < numCells; cl++) {
-        // Use this if data is used in row-major format 
+        // Use this if data is used in row-major format
         Teuchos::BLAS<int, double> myblas;
         myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
                     numRightFields, numLeftFields, numData,
@@ -186,7 +165,7 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
                     &leftFields[cl*skipL], numData,
                     beta, &outputFields[cl*skipOp], numRightFields);
     */
-	// Use this if data is used in column-major format 
+	// Use this if data is used in column-major format
         /*
         myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
                     numLeftFields, numRightFields, numData,
@@ -198,19 +177,18 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     }
     break;
   case 2: {
-        
-    
+
+
     Kokkos::initialize();
-    
-    //input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
-    //input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
-    
+
+    input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
+    input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
     output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
     /*
     input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
     input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
     output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
-    
+
     // Copy everything
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
@@ -229,7 +207,7 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
 	    for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
 	      hostRight(cl, rbf, qp, iTens1, iTens2) = rightFields(cl, rbf, qp, iTens1, iTens2);
 	    }
-          }	 
+          }
         }
       }
 
@@ -239,17 +217,17 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
         }
       }
     }
-    
+
     Kokkos::deep_copy(kokkosLeft, hostLeft);
     Kokkos::deep_copy(kokkosRight, hostRight);
     Kokkos::deep_copy(kokkosOut, hostOut);
-    
+
     ContractFieldFieldTensorFunctor<input_view_t, input_view_t, output_view_t>
       kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
 		    numLeftFields, numRightFields, numPoints,
 		    dim1Tensor, dim2Tensor);
     //Kokkos::parallel_for(numCells, kokkosFunctor);
-    
+
     Kokkos::fence();
 
     Kokkos::deep_copy(hostOut, kokkosOut);
