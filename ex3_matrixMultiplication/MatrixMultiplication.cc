@@ -54,8 +54,8 @@ using Intrepid::FieldContainer;
 
 typedef Intrepid::RealSpaceTools<double> rst;
 
-typedef Kokkos::View<double *****> input_view_t;
-typedef Kokkos::View<double ***> output_view_t;
+typedef Kokkos::View<double*****> input_view_t;
+typedef Kokkos::View<double***, Kokkos::LayoutRight> output_view_t;
 
 typedef input_view_t::HostMirror input_host_t;
 typedef output_view_t::HostMirror output_host_t;
@@ -202,8 +202,9 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     
     Kokkos::initialize();
     
-    input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
-    input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
+    //input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
+    //input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
+    
     output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
     /*
     input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
