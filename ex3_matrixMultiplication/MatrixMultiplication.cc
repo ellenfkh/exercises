@@ -43,8 +43,7 @@
 #include "Teuchos_RCP.hpp"
 #include "Teuchos_ScalarTraits.hpp"
 #include "Teuchos_GlobalMPISession.hpp"
-
-
+    
 using std::string;
 using std::vector;
 using std::array;
@@ -53,8 +52,15 @@ using std::chrono::duration;
 using std::chrono::duration_cast;
 using Intrepid::FieldContainer;
 
-/*
-template<class Scalar, class LeftViewType, class RightViewType, class OutputViewType>
+typedef Intrepid::RealSpaceTools<double> rst;
+
+typedef Kokkos::View<double *****> input_view_t;
+typedef Kokkos::View<double ***> output_view_t;
+
+typedef input_view_t::HostMirror input_host_t;
+typedef output_view_t::HostMirror output_host_t;
+
+template<class LeftViewType, class RightViewType, class OutputViewType>
 struct ContractFieldFieldTensorFunctor {
   LeftViewType _leftFields;
   RightViewType _rightFields;
@@ -64,18 +70,15 @@ struct ContractFieldFieldTensorFunctor {
   int _numPoints;
   int _dim1Tensor;
   int _dim2Tensor;
-  bool _sumInto;
 
-  ContractFieldFieldTensorFunctor(
-				  LeftViewType leftFields,
+  ContractFieldFieldTensorFunctor(LeftViewType leftFields,
 				  RightViewType rightFields,
 				  OutputViewType outputFields,
 				  int numLeftFields,
 				  int numRightFields,
 				  int numPoints,
 				  int dim1Tensor,
-				  int dim2Tensor,
-				  bool sumInto) :
+				  int dim2Tensor) :
     _leftFields(leftFields),
     _rightFields(rightFields),
     _outputFields(outputFields),
@@ -83,47 +86,30 @@ struct ContractFieldFieldTensorFunctor {
     _numRightFields(numRightFields),
     _numPoints(numPoints),
     _dim1Tensor(dim1Tensor),
-    _dim2Tensor(dim2Tensor),
-    _sumInto(sumInto)
+    _dim2Tensor(dim2Tensor)
   {
     // Nothing to do
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
-    if (_sumInto) {
-      for (int lbf = 0; lbf < _numLeftFields; lbf++) {
-        for (int rbf = 0; rbf < _numRightFields; rbf++) {
-          Scalar tmpVal(0);
-          for (int qp = 0; qp < _numPoints; qp++) {
-            for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
-              for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
-                tmpVal += _leftFields(elementIndex, lbf, qp, iTens1, iTens2)*_rightFields(elementIndex, rbf, qp, iTens1, iTens2);
-	      } // D2-loop
-            } // D1-loop
-          } // P-loop
-          _outputFields(elementIndex, lbf, rbf) += tmpVal;
-        } // R-loop
-      } // L-loop
-    }
-    else {
-      for (int lbf = 0; lbf < _numLeftFields; lbf++) {
-        for (int rbf = 0; rbf < _numRightFields; rbf++) {
-          Scalar tmpVal(0);
-          for (int qp = 0; qp < _numPoints; qp++) {
-            for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
-              for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
-                tmpVal += _leftFields(elementIndex, lbf, qp, iTens1, iTens2)*_rightFields(elementIndex, rbf, qp, iTens1, iTens2);
-              } // D2-loop
-            } // D1-loop
-          } // P-loop
-          _outputFields(elementIndex, lbf, rbf) = tmpVal;
-        } // R-loop
-      } // L-loop
-    }
+  
+    for (int lbf = 0; lbf < _numLeftFields; lbf++) {
+      for (int rbf = 0; rbf < _numRightFields; rbf++) {
+      double tmpVal = 0;
+        for (int qp = 0; qp < _numPoints; qp++) {
+          for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
+            for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
+              tmpVal += _leftFields(elementIndex, lbf, qp, iTens1, iTens2)*_rightFields(elementIndex, rbf, qp, iTens1, iTens2);
+            } // D2-loop
+          } // D1-loop
+        } // P-loop
+        _outputFields(elementIndex, lbf, rbf) = tmpVal;
+      } // R-loop
+    } // L-loop
   }
 };
-*/
+
 
 void contractFieldFieldTensor(FieldContainer<double> & outputFields,
 			      const FieldContainer<double> &   leftFields,
@@ -181,25 +167,26 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
        C        result for cell cl                    = &outputFields[cl*skipOp]
        LDC      #rows(C)                              = number of right fields
       */
+
+    //TODO this breaks the compiler right now
+    /*
       int numData  = numPoints*dim1Tensor*dim2Tensor;
       int skipL    = numLeftFields*numData;         // size of the left data chunk per cell
       int skipR    = numRightFields*numData;        // size of the right data chunk per cell
       int skipOp   = numLeftFields*numRightFields;  // size of the output data chunk per cell
-      Scalar alpha(1.0);                            // these are left unchanged by GEMM
-      Scalar beta(0.0);
-      if (sumInto) {
-        beta = 1.0;
-      }
+      double alpha = 1.0;                            // these are left unchanged by GEMM
+      double  beta = 0.0;
 
       for (int cl=0; cl < numCells; cl++) {
-        /* Use this if data is used in row-major format */
-        Teuchos::BLAS<int, Scalar> myblas;
+        // Use this if data is used in row-major format 
+        Teuchos::BLAS<int, double> myblas;
         myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
                     numRightFields, numLeftFields, numData,
                     alpha, &rightFields[cl*skipR], numData,
                     &leftFields[cl*skipL], numData,
                     beta, &outputFields[cl*skipOp], numRightFields);
-        /* Use this if data is used in column-major format */
+    */
+	// Use this if data is used in column-major format 
         /*
         myblas.GEMM(Teuchos::TRANS, Teuchos::NO_TRANS,
                     numLeftFields, numRightFields, numData,
@@ -207,75 +194,70 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
                     &rightFields[cl*skipR], numData,
                     beta, &outputFields[cl*skipOp], numLeftFields);
         */
-      }
+    //}
     }
     break;
   case 2: {
-    /*
-    typedef Kokkos::View<Scalar*****> input_view_t;
-    typedef Kokkos::View<Scalar***> output_view_t;
-
-    typedef typename input_view_t::HostMirror input_host_t;
-    typedef typename output_view_t::HostMirror output_host_t;
-
+        
+    
     Kokkos::initialize();
-
+    
     input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
     input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
     output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
-
+    /*
     input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
     input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
     output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
-
+    
     // Copy everything
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
-	      for (int qp = 0; qp < numPoints; ++qp) {
-	        for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
-	          for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
-	            hostLeft(cl, lbf, qp, iTens1, iTens2) = leftFields(cl, lbf, qp, iTens1, iTens2);
-	          }
-	        }
-	      }
+	for (int qp = 0; qp < numPoints; ++qp) {
+	  for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
+	    for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
+	      hostLeft(cl, lbf, qp, iTens1, iTens2) = leftFields(cl, lbf, qp, iTens1, iTens2);
+	    }
+          }
+        }
       }
 
       for (int rbf = 0; rbf < numRightFields; ++rbf) {
-	      for (int qp = 0; qp < numPoints; ++qp) {
-	        for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
-	          for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
-	            hostRight(cl, rbf, qp, iTens1, iTens2) = rightFields(cl, rbf, qp, iTens1, iTens2);
-	          }
-	        }
-	      }
+	for (int qp = 0; qp < numPoints; ++qp) {
+	  for (int iTens1 = 0; iTens1 < dim1Tensor; ++iTens1) {
+	    for (int iTens2 = 0; iTens2 < dim2Tensor; ++iTens2) {
+	      hostRight(cl, rbf, qp, iTens1, iTens2) = rightFields(cl, rbf, qp, iTens1, iTens2);
+	    }
+          }	 
+        }
       }
 
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
-	      for (int rbf = 0; rbf < numRightFields; ++rbf) {
-	        hostOut(cl, lbf, rbf) = outputFields(cl, lbf, rbf);
-	      }
+	for (int rbf = 0; rbf < numRightFields; ++rbf) {
+	  hostOut(cl, lbf, rbf) = outputFields(cl, lbf, rbf);
+        }
       }
     }
-
+    
     Kokkos::deep_copy(kokkosLeft, hostLeft);
     Kokkos::deep_copy(kokkosRight, hostRight);
     Kokkos::deep_copy(kokkosOut, hostOut);
-
-    ContractFieldFieldTensorFunctor<Scalar, input_view_t, input_view_t, output_view_t>
+    
+    ContractFieldFieldTensorFunctor<input_view_t, input_view_t, output_view_t>
       kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
 		    numLeftFields, numRightFields, numPoints,
-		    dim1Tensor, dim2Tensor, sumInto);
-    Kokkos::parallel_for(numCells, kokkosFunctor);
-
+		    dim1Tensor, dim2Tensor);
+    //Kokkos::parallel_for(numCells, kokkosFunctor);
+    
     Kokkos::fence();
 
     Kokkos::deep_copy(hostOut, kokkosOut);
 
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
-	      for (int rbf = 0; rbf < numRightFields; ++rbf) {
-	        outputFields(cl, lbf, rbf) = hostOut(cl, lbf, rbf);
-	      }
+        for (int rbf = 0; rbf < numRightFields; ++rbf) {
+          outputFields(cl, lbf, rbf) = hostOut(cl, lbf, rbf);
+        }
       }
     }
     Kokkos::finalize();
@@ -298,7 +280,7 @@ int main(int argc, char* argv[]) {
   FieldContainer<double> in_c_r_p_d_d(c, r, p, d1, d2);
   FieldContainer<double> out1_c_l_r(c, l, r);
   FieldContainer<double> out2_c_l_r(c, l, r);
-  double zero = INTREPID_TOL*10000.0;
+  double zero = Intrepid::INTREPID_TOL*10000.0;
 
   // fill with random numbers
   for (int i=0; i<in_c_l_p_d_d.size(); i++) {
@@ -320,9 +302,9 @@ int main(int argc, char* argv[]) {
    * 2 -> kokkos
    */
    rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
-   if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), NORM_ONE) > zero) {
+   if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
       std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_BLAS; "
-      << " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), NORM_ONE) << "\n\n";
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
    }
    else {
      std::cout << "Cpp and blas get same result" << std::endl;
