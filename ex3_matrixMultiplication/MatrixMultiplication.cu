@@ -182,13 +182,16 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     Kokkos::initialize();
 
     input_view_t kokkosLeft("left_input", numCells, numLeftFields, numPoints, dim1Tensor, dim2Tensor);
+    
     input_view_t kokkosRight("right_input", numCells, numRightFields, numPoints, dim1Tensor, dim2Tensor);
     output_view_t kokkosOut("output", numCells, numLeftFields, numRightFields);
-    /*
+    
     input_host_t hostLeft = Kokkos::create_mirror_view(kokkosLeft);
     input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
     output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
-
+    
+    hostRight(1,1,1,1,1) = 5;
+    
     // Copy everything
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
@@ -217,17 +220,17 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
         }
       }
     }
-
+    /*
     Kokkos::deep_copy(kokkosLeft, hostLeft);
     Kokkos::deep_copy(kokkosRight, hostRight);
     Kokkos::deep_copy(kokkosOut, hostOut);
-
+    
     ContractFieldFieldTensorFunctor<input_view_t, input_view_t, output_view_t>
       kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
 		    numLeftFields, numRightFields, numPoints,
 		    dim1Tensor, dim2Tensor);
-    //Kokkos::parallel_for(numCells, kokkosFunctor);
-
+    Kokkos::parallel_for(numCells, kokkosFunctor);
+    
     Kokkos::fence();
 
     Kokkos::deep_copy(hostOut, kokkosOut);
@@ -239,8 +242,9 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
         }
       }
     }
-    Kokkos::finalize();
     */
+    Kokkos::finalize();
+    
   }
   break;
 
@@ -272,8 +276,8 @@ int main(int argc, char* argv[]) {
 
 
  contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
- contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 1);
-
+ contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+ 
 
   /* I got rid of the typedefs - for now
    * 0 -> manual computation
@@ -282,16 +286,12 @@ int main(int argc, char* argv[]) {
    */
    rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
    if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
-      std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_BLAS; "
+      std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
 		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
    }
    else {
-     std::cout << "Cpp and blas get same result" << std::endl;
+     std::cout << "Cpp and Kokkos get same result" << std::endl;
    }
-
-
-  contractFieldFieldTensor(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
-  contractFieldFieldTensor(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 1);
 
   /*
   Kokkos::initialize();
