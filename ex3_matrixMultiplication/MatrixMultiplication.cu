@@ -33,6 +33,17 @@ using Intrepid::FieldContainer;
 
 typedef Intrepid::RealSpaceTools<double> rst;
 
+//Pre-C++11 timing (thanks jeff)
+double                                                                                                                                      getElapsedTime(const timespec start, const timespec end) {                                                                                                   
+  timespec temp;                                                                                                                                             
+  if ((end.tv_nsec-start.tv_nsec)<0) {                                                                                                                       
+    temp.tv_sec = end.tv_sec-start.tv_sec-1;                                                                                                                 
+    temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;                                                                                                     
+  } else {                                                                                                                                      temp.tv_sec = end.tv_sec-start.tv_sec;                                                                                                      temp.tv_nsec = end.tv_nsec-start.tv_nsec;                                                                                                 }                                                                                                                                       
+  return double(temp.tv_sec) + double(temp.tv_nsec) / 1e9;                                                                                  }       
+
+
+
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
 struct ContractFieldFieldTensorFunctor {
   typedef DeviceType device_type;
@@ -89,7 +100,8 @@ template <class DeviceType>
 void contractFieldFieldTensor(FieldContainer<double> & outputFields,
 			      const FieldContainer<double> &   leftFields,
 			      const FieldContainer<double> &  rightFields,
-                              const int compEngine) {
+                              const int compEngine,
+			      double* time = 0) {
 
   typedef Kokkos::View<double *****, DeviceType> input_view_t;
   typedef Kokkos::View<double ***, DeviceType> output_view_t;
@@ -193,8 +205,6 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     input_host_t hostRight = Kokkos::create_mirror_view(kokkosRight);
     output_host_t hostOut = Kokkos::create_mirror_view(kokkosOut);
 
-    hostRight(1,1,1,1,1) = 5;
-
     // Copy everything
     for (int cl = 0; cl < numCells; ++cl) {
       for (int lbf = 0; lbf < numLeftFields; ++lbf) {
@@ -223,11 +233,15 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
         }
       }
     }
-    /*
+    
     Kokkos::deep_copy(kokkosLeft, hostLeft);
     Kokkos::deep_copy(kokkosRight, hostRight);
     Kokkos::deep_copy(kokkosOut, hostOut);
-
+    
+    timespec tic;
+    if(time != 0)
+      clock_gettime(CLOCK_MONOTONIC, &tic);
+ 
     ContractFieldFieldTensorFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
       kokkosFunctor(kokkosLeft, kokkosRight, kokkosOut,
 		    numLeftFields, numRightFields, numPoints,
@@ -235,7 +249,12 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
     Kokkos::parallel_for(numCells, kokkosFunctor);
 
     Kokkos::fence();
-
+    
+    timespec toc;
+    if(time !=0){
+      clock_gettime(CLOCK_MONOTONIC, &toc);
+      *time += getElapsedTime(tic, toc);
+    }
     Kokkos::deep_copy(hostOut, kokkosOut);
 
     for (int cl = 0; cl < numCells; ++cl) {
@@ -245,7 +264,7 @@ void contractFieldFieldTensor(FieldContainer<double> & outputFields,
         }
       }
     }
-    */
+    
     Kokkos::finalize();
 
   }
@@ -260,7 +279,7 @@ int main(int argc, char* argv[]) {
   // ===============================================================
   // ********************** < do kokkos> ***************************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-  int c=5, p=9, l=3, r=7, d1=13, d2=5;
+  int c=5000, p=20, l=3, r=7, d1=13, d2=5;
 
   FieldContainer<double> in_c_l_p_d_d(c, l, p, d1, d2);
   FieldContainer<double> in_c_r_p_d_d(c, r, p, d1, d2);
@@ -276,16 +295,59 @@ int main(int argc, char* argv[]) {
     in_c_r_p_d_d[i] = Teuchos::ScalarTraits<double>::random();
   }
 
+  printf("trying kokkos openmp 0, (manual)\n");
+  
+  //Warmup
+  contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d,0);
+  
+  timespec tic;
+  clock_gettime(CLOCK_MONOTONIC, &tic);
+    
+  //repeat the calculation 5 times so we can average out some randomness
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  }
 
-
-  printf("trying kokkos openmp 0\n");
- contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  timespec toc;
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_manual = getElapsedTime(tic, toc);
+  
   printf("trying kokkos openmp 2\n");
- contractFieldFieldTensor<Kokkos::OpenMP>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  
+  //Warmpup
+  contractFieldFieldTensor<Kokkos::OpenMP>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);  
+  clock_gettime(CLOCK_MONOTONIC, &tic);
+
+  //repeat the calculation 5 times so we can average out some randomness                                                                                     
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  }
+
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_kokkos = getElapsedTime(tic, toc);
+  
+  rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+  if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
+    std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
+	      << " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
+  }
+  else {
+    std::cout << "Cpp and Kokkos get same result, kokkos speedup of " << elapsedTime_manual/elapsedTime_kokkos << std::endl;
+  }
+  
+  //Now try the kokkos version without the copying of things in/out
+  double elapsedTime_kokkos_noCopy = 0;
+  
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2, &elapsedTime_kokkos_noCopy);
+  }
+  
+  std::cout << "cpp vs. no copy yields a speedup of " << elapsedTime_manual/elapsedTime_kokkos_noCopy << std::endl;
+
   printf("trying kokkos cuda 0\n");
- contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
   printf("trying kokkos cuda 2\n");
- contractFieldFieldTensor<Kokkos::Cuda>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  contractFieldFieldTensor<Kokkos::Cuda>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
 
 
   /* I got rid of the typedefs - for now
@@ -301,74 +363,6 @@ int main(int argc, char* argv[]) {
    else {
      std::cout << "Cpp and Kokkos get same result" << std::endl;
    }
-
-  /*
-  Kokkos::initialize();
-
-  //printf("kokkos is running on %s\n", typeid(Kokkos::DefaultExecutionSpace).name());
-  matrixView_type left("left", matrixSize*matrixSize);
-  matrixView_type right("right", matrixSize*matrixSize);
-  matrixView_type result("result", matrixSize*matrixSize);
-
-  host_matrix h_left = Kokkos::create_mirror_view(left);
-  host_matrix h_right = Kokkos::create_mirror_view(right);
-  host_matrix h_result = Kokkos::create_mirror_view(result);
-
-  for(unsigned index = 0; index < matrixSize*matrixSize; ++index) {
-    h_left(index) = leftMatrix(index);
-    h_right(index) = rightMatrixRow(index);
-    h_result(index) = 0;
-  }
-
-  Kokkos::deep_copy(left, h_left);
-  Kokkos::deep_copy(right, h_right);
-  Kokkos::deep_copy(result, h_result);
-
-  KokkosFunctor kokkosFunctor(matrixSize, left, right, result);
-  // start timing
-  tic = high_resolution_clock::now();
-  matrixView_type finalResults;
-  for (unsigned int repeatIndex = 0;
-       repeatIndex < numberOfRepeats; ++repeatIndex) {
-
-    Kokkos::parallel_for(matrixSize*matrixSize, kokkosFunctor);
-    Kokkos::fence();
-
-  }
-  // stop timing
-  toc = high_resolution_clock::now();
-  const double kokkosElapsedTime =
-    duration_cast<duration<double> >(toc - tic).count();
-
-  Kokkos::deep_copy(h_result, result);
-
-  for(unsigned index = 0; index < matrixSize * matrixSize; ++index){
-    resultMatrix(index) = h_result(index);
-  }
-  // check the answer
-  double kokkosCheckSum = 0;
-  for (unsigned int row = 0; row < matrixSize; ++row) {
-    for (unsigned int col = 0; col < matrixSize; ++col) {
-      kokkosCheckSum += resultMatrix(row*matrixSize + col);
-    }
-  }
-  sprintf(methodName, "naive kokkos");
-  if (std::abs(cacheUnfriendlyCheckSum - kokkosCheckSum) / cacheUnfriendlyCheckSum < 1e-3) {
-    printf("%-38s : time %6.2f speedup w.r.t. unfriendly %6.2f, w.r.t. friendly %6.2f\n",
-           methodName,
-           kokkosElapsedTime,
-           cacheUnfriendlyElapsedTime / kokkosElapsedTime,
-           cacheFriendlyElapsedTime / kokkosElapsedTime);
-  } else {
-    printf("%-38s : incorrect checksum %lf instead of %lf\n",
-           methodName, kokkosCheckSum, cacheUnfriendlyCheckSum);
-  }
-
-  Kokkos::finalize();
-  */
-  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  // ********************** </do kokkos> ***************************
-  // ===============================================================
 
   return 0;
 }
