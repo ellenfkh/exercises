@@ -1,87 +1,72 @@
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <vector>
-#include <array>
-#include <string>
-#include <chrono>
-#include <algorithm>
-
-#include <Kokkos_Core.hpp>
-
-using std::string;
-using std::vector;
-using std::array;
-using std::chrono::high_resolution_clock;
-using std::chrono::duration;
-using std::chrono::duration_cast;
+#include <assert.h>
 
 template <class Scalar>
-struct 4DTensorArray {
-  vector<Scalar> _data;
+struct fourDTensorArray {
+  std::vector<Scalar> _data;
   const unsigned int _numCells;
   const unsigned int _numFields;
   const unsigned int _numPoints;
   const unsigned int _dimVec;
 
-  4DTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec)
+  fourDTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec)
   :_numCells(cl), _numFields(bf), _numPoints(qp), _dimVec(iVec), _data(cl*bf*qp*iVec) {
   }
 
   inline
-  double &
+  Scalar &
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec) {
-    return _data[cl *_numCells + bf * _numFields + qp * numPoints + iVec];
+    return _data[cl *_numCells + bf * _numFields + qp * _numPoints + iVec];
   }
 
   inline
-  double
-  operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec) {
-    return _data[cl *_numCells + bf * _numFields + qp * numPoints + iVec];
+  Scalar
+  operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec) const {
+    return _data[cl *_numCells + bf * _numFields + qp * _numPoints + iVec];
   }
 
   void
   fill(const Scalar d) {
-    std::fill(_data.begin(), _data.end(), 0);
+    std::fill(_data.begin(), _data.end(), d);
   }
-}
+};
 
 template <class Scalar>
-struct 3DTensorArray {
-  vector<Scalar> _data;
+struct threeDTensorArray {
+  std::vector<Scalar> _data;
   const unsigned int _numCells;
   const unsigned int _numFields;
   const unsigned int _numPoints;
 
-  3DTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp)
+  threeDTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp)
   :_numCells(cl), _numFields(bf), _numPoints(qp), _data(cl*bf*qp) {
   }
 
   inline
-  double &
+  Scalar &
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp) {
     return _data[cl *_numCells + bf * _numFields + qp];
   }
 
   inline
-  double
-  operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp) {
+  Scalar
+  operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp) const {
     return _data[cl *_numCells + bf * _numFields + qp];
   }
 
   void
   fill(const Scalar d) {
-    std::fill(_data.begin(), _data.end(), 1);
+    std::fill(_data.begin(), _data.end(), d);
   }
-}
+};
 
 enum ECompEngine {COMP_CPP, COMP_BLAS, COMP_KOKKOS};
 
 
 template <class Scalar>
-void contractFieldFieldVectorSerial(3DTensorArray &             outputFields,
-                                    const 4DTensorArray &       leftFields,
-                                    const 4DTensorArray &       rightFields,
+void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFields,
+                                    const fourDTensorArray<Scalar> &    leftFields,
+                                    const fourDTensorArray<Scalar> &    rightFields,
                                     const ECompEngine           compEngine,
                                     const bool                  sumInto) {
 
@@ -125,16 +110,17 @@ void contractFieldFieldVectorSerial(3DTensorArray &             outputFields,
       }
     }
     break;
+  }
 }
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, const char* argv[]) {
   const unsigned int dummySize = 10;
 
 
-  4DTensorArray<double> leftInput(dummySize, dummySize, dummySize, dummySize);
-  4DTensorArray<double> rightInput(dummySize, dummySize, dummySize, dummySize);
-  3DTensorArray<double> output(dummySize, dummySize, dummySize);
+  fourDTensorArray<double> leftInput(dummySize, dummySize, dummySize, dummySize);
+  fourDTensorArray<double> rightInput(dummySize, dummySize, dummySize, dummySize);
+  threeDTensorArray<double> output(dummySize, dummySize, dummySize);
 
   leftInput.fill(1);
   rightInput.fill(1);
