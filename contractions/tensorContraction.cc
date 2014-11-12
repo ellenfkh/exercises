@@ -13,7 +13,7 @@ struct fourDTensorArray {
   const unsigned int _dimVec;
 
   fourDTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec)
-  :_numCells(cl), _numFields(bf), _numPoints(qp), _dimVec(iVec), _data(cl*bf*qp*iVec) {
+  :_data(cl*bf*qp*iVec), _numCells(cl), _numFields(bf), _numPoints(qp), _dimVec(iVec) {
   }
 
   inline
@@ -42,7 +42,7 @@ struct threeDTensorArray {
   const unsigned int _numPoints;
 
   threeDTensorArray(const unsigned int cl, const unsigned int bf, const unsigned int qp)
-  :_numCells(cl), _numFields(bf), _numPoints(qp), _data(cl*bf*qp) {
+  :_data(cl*bf*qp), _numCells(cl), _numFields(bf), _numPoints(qp) {
   }
 
   inline
