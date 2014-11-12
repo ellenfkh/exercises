@@ -1,5 +1,8 @@
 #include <vector>
+#include <stdio.h>
 #include <assert.h>
+
+#include <Kokkos_Core.hpp>
 
 template <class Scalar>
 struct fourDTensorArray {
@@ -16,13 +19,13 @@ struct fourDTensorArray {
   inline
   Scalar &
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec) {
-    return _data[cl *_numCells + bf * _numFields + qp * _numPoints + iVec];
+    return _data[cl * _numFields * _numPoints * _dimVec + bf * _numPoints * _dimVec  + qp * _dimVec + iVec];
   }
 
   inline
   Scalar
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp, const unsigned int iVec) const {
-    return _data[cl *_numCells + bf * _numFields + qp * _numPoints + iVec];
+    return _data[cl * _numFields * _numPoints * _dimVec + bf * _numPoints * _dimVec  + qp * _dimVec + iVec];
   }
 
   void
@@ -45,13 +48,13 @@ struct threeDTensorArray {
   inline
   Scalar &
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp) {
-    return _data[cl *_numCells + bf * _numFields + qp];
+    return _data[cl * _numFields * _numPoints + bf * _numPoints + qp];
   }
 
   inline
   Scalar
   operator()(const unsigned int cl, const unsigned int bf, const unsigned int qp) const {
-    return _data[cl *_numCells + bf * _numFields + qp];
+    return _data[cl * _numFields * _numPoints + bf * _numPoints + qp];
   }
 
   void
@@ -126,15 +129,31 @@ int main(int argc, const char* argv[]) {
   rightInput.fill(1);
   output.fill(1);
 
+  for (unsigned int cl = 0; cl < dummySize; cl++) {
+    for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
+      for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
+        if (output(cl, lbf, rbf) != 1) {
+          printf("Output at %d, %d, %d should be 1; instead is %f\n", cl, lbf, rbf, output(cl, lbf, rbf));
+          return 1;
+        }
+      }
+    }
+  }
+
   contractFieldFieldVectorSerial<double>(output, leftInput, rightInput, COMP_CPP, false);
 
   for (unsigned int cl = 0; cl < dummySize; cl++) {
     for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
       for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
-        assert(output(cl, lbf, rbf) == 100);
+        if (output(cl, lbf, rbf) != 100) {
+          printf("Output at %d, %d, %d should be 100; instead is %f\n", cl, lbf, rbf, output(cl, lbf, rbf));
+          return 1;
+        }
       }
     }
   }
+
+  printf("passed serial, sumInto = false\n");
 
   output.fill(1);
 
@@ -143,10 +162,14 @@ int main(int argc, const char* argv[]) {
   for (unsigned int cl = 0; cl < dummySize; cl++) {
     for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
       for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
-        assert(output(cl, lbf, rbf) == 101);
+        if (output(cl, lbf, rbf) != 101) {
+          printf("Output at %d, %d, %d should be 101; instead is %f\n", cl, lbf, rbf, output(cl, lbf, rbf));
+          return 1;
+        }
       }
     }
   }
+  printf("passed serial, sumInto = true\n");
 
   return 0;
 }
