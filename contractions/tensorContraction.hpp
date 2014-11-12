@@ -70,21 +70,21 @@ void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFi
                                     const ECompEngine           compEngine,
                                     const bool                  sumInto) {
 
-  int numCells        = leftFields._numCells;
-  int numLeftFields   = leftFields._numFields;
-  int numRightFields  = rightFields._numFields;
-  int numPoints       = leftFields._numPoints;
-  int dimVec          = leftFields._dimVec;
+  const unsigned int numCells        = leftFields._numCells;
+  const unsigned int numLeftFields   = leftFields._numFields;
+  const unsigned int numRightFields  = rightFields._numFields;
+  const unsigned int numPoints       = leftFields._numPoints;
+  const unsigned int dimVec          = leftFields._dimVec;
 
   switch(compEngine) {
     case COMP_CPP: {
       if (sumInto) {
-        for (int cl = 0; cl < numCells; cl++) {
-          for (int lbf = 0; lbf < numLeftFields; lbf++) {
-            for (int rbf = 0; rbf < numRightFields; rbf++) {
+        for (unsigned int cl = 0; cl < numCells; cl++) {
+          for (unsigned int lbf = 0; lbf < numLeftFields; lbf++) {
+            for (unsigned int rbf = 0; rbf < numRightFields; rbf++) {
               Scalar tmpVal(0);
-              for (int qp = 0; qp < numPoints; qp++) {
-                for (int iVec = 0; iVec < dimVec; iVec++) {
+              for (unsigned int qp = 0; qp < numPoints; qp++) {
+                for (unsigned int iVec = 0; iVec < dimVec; iVec++) {
                   tmpVal += leftFields(cl, lbf, qp, iVec)*rightFields(cl, rbf, qp, iVec);
                 } //D-loop
               } // P-loop
@@ -94,12 +94,12 @@ void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFi
         } // C-loop
       }
       else {
-        for (int cl = 0; cl < numCells; cl++) {
-          for (int lbf = 0; lbf < numLeftFields; lbf++) {
-            for (int rbf = 0; rbf < numRightFields; rbf++) {
+        for (unsigned int cl = 0; cl < numCells; cl++) {
+          for (unsigned int lbf = 0; lbf < numLeftFields; lbf++) {
+            for (unsigned int rbf = 0; rbf < numRightFields; rbf++) {
               Scalar tmpVal(0);
-              for (int qp = 0; qp < numPoints; qp++) {
-                for (int iVec = 0; iVec < dimVec; iVec++) {
+              for (unsigned int qp = 0; qp < numPoints; qp++) {
+                for (unsigned int iVec = 0; iVec < dimVec; iVec++) {
                   tmpVal += leftFields(cl, lbf, qp, iVec)*rightFields(cl, rbf, qp, iVec);
                 } //D-loop
               } // P-loop
@@ -128,9 +128,9 @@ int main(int argc, const char* argv[]) {
 
   contractFieldFieldVectorSerial<double>(output, leftInput, rightInput, COMP_CPP, false);
 
-  for (int cl = 0; cl < dummySize; cl++) {
-    for (int lbf = 0; lbf < dummySize; lbf++) {
-      for (int rbf = 0; rbf < dummySize; rbf++) {
+  for (unsigned int cl = 0; cl < dummySize; cl++) {
+    for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
+      for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
         assert(output(cl, lbf, rbf) == 100);
       }
     }
@@ -140,9 +140,9 @@ int main(int argc, const char* argv[]) {
 
   contractFieldFieldVectorSerial<double>(output, leftInput, rightInput, COMP_CPP, true);
 
-  for (int cl = 0; cl < dummySize; cl++) {
-    for (int lbf = 0; lbf < dummySize; lbf++) {
-      for (int rbf = 0; rbf < dummySize; rbf++) {
+  for (unsigned int cl = 0; cl < dummySize; cl++) {
+    for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
+      for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
         assert(output(cl, lbf, rbf) == 101);
       }
     }
