@@ -66,18 +66,12 @@ NVCC            ?= $(CUDA_BIN_PATH)/nvcc
 
 CC_FLAGS   += -std=c++11 -fopenmp
 
-TARGETS = MatrixMultiplication tensorContraction
+TARGETS = tensorContraction
 
 all: $(TARGETS)
 
-MatrixMultiplication: MatrixMultiplication.cc MatrixMultiplication_cuda.o
-	$(CC) $< -o $@ MatrixMultiplication_cuda.o -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
-
-MatrixMultiplication_cuda.o: MatrixMultiplication_cuda.cu
-	$(NVCC) $(NVCCFLAGS) -O3 $(GENCODE_FLAGS) -I$(CUDA_INC_PATH) $(NVCC_INCLUDE) -o $@ -c $<
-
-tensorContraction: tensorContraction.cc MatrixMultiplication_cuda.o
-	$(CC) $< -o $@ MatrixMultiplication_cuda.o -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
+tensorContraction: tensorContraction.cc
+	$(CC) $< -o $@ -O3 $(CC_INCLUDE) $(LD_FLAGS) $(CC_FLAGS) -Wall
 
 clean:
 	rm -f *.o $(TARGETS)
