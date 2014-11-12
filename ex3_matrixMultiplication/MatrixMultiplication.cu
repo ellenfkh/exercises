@@ -42,6 +42,56 @@ double                                                                          
   } else {                                                                                                                                      temp.tv_sec = end.tv_sec-start.tv_sec;                                                                                                      temp.tv_nsec = end.tv_nsec-start.tv_nsec;                                                                                                 }                                                                                                                                       
   return double(temp.tv_sec) + double(temp.tv_nsec) / 1e9;                                                                                  }       
 
+template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
+struct ContractFieldFieldTensorFunctorUnrolled1 {
+  typedef DeviceType device_type;
+  LeftViewType _leftFields;
+  RightViewType _rightFields;
+  OutputViewType _outputFields;
+  int _numLeftFields;
+  int _numRightFields;
+  int _numPoints;
+  int _dim1Tensor;
+  int _dim2Tensor;
+
+  ContractFieldFieldTensorFunctorUnrolled1(LeftViewType leftFields,
+				  RightViewType rightFields,
+				  OutputViewType outputFields,
+				  int numLeftFields,
+				  int numRightFields,
+				  int numPoints,
+				  int dim1Tensor,
+				  int dim2Tensor) :
+    _leftFields(leftFields),
+    _rightFields(rightFields),
+    _outputFields(outputFields),
+    _numLeftFields(numLeftFields),
+    _numRightFields(numRightFields),
+    _numPoints(numPoints),
+    _dim1Tensor(dim1Tensor),
+    _dim2Tensor(dim2Tensor)
+  {
+    // Nothing to do
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const unsigned int elementIndex) const {
+    int pointIndex = elementIndex / _numLeftFields;
+    int leftField = elementIndex % _numLeftFields;
+    
+    for (int rbf = 0; rbf < _numRightFields; rbf++) {
+      double tmpVal = 0;
+      for (int qp = 0; qp < _numPoints; qp++) {
+        for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
+          for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
+            tmpVal += _leftFields(pointIndex, leftField, qp, iTens1, iTens2)*_rightFields(pointIndex, rbf, qp, iTens1, iTens2);
+          } // D2-loo
+        } // D1-loop
+      } // P-loop
+      _outputFields(pointIndex, leftField, rbf) = tmpVal;
+    } // R-loop
+  }
+};
 
 
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
@@ -287,6 +337,12 @@ int main(int argc, char* argv[]) {
   FieldContainer<double> out2_c_l_r(c, l, r);
   double zero = Intrepid::INTREPID_TOL*10000.0;
 
+  /* I got rid of the typedefs - for now
+   * 0 -> manual computation
+   * 1 -> blas
+   * 2 -> kokkos
+   */
+
   // fill with random numbers
   for (int i=0; i<in_c_l_p_d_d.size(); i++) {
     in_c_l_p_d_d[i] = Teuchos::ScalarTraits<double>::random();
@@ -342,27 +398,47 @@ int main(int argc, char* argv[]) {
     contractFieldFieldTensor<Kokkos::OpenMP>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2, &elapsedTime_kokkos_noCopy);
   }
   
-  std::cout << "cpp vs. no copy yields a speedup of " << elapsedTime_manual/elapsedTime_kokkos_noCopy << std::endl;
+  std::cout << "not counting copying yields a speedup of " << elapsedTime_manual/elapsedTime_kokkos_noCopy << std::endl;
 
-  printf("trying kokkos cuda 0\n");
-  contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  printf("trying cuda cuda 0, (manual)\n");
+  
+  //Warmup
+  contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d,0);
+  
+  clock_gettime(CLOCK_MONOTONIC, &tic);
+    
+  //repeat the calculation 5 times so we can average out some randomness
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 0);
+  }
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_manual_cuda = getElapsedTime(tic, toc);
+  
   printf("trying kokkos cuda 2\n");
-  contractFieldFieldTensor<Kokkos::Cuda>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  
+  //Warmpup
+  contractFieldFieldTensor<Kokkos::Cuda>(out2_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);  
+  clock_gettime(CLOCK_MONOTONIC, &tic);
 
+  //repeat the calculation 5 times so we can average out some randomness                                                                                     
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2);
+  }
 
-  /* I got rid of the typedefs - for now
-   * 0 -> manual computation
-   * 1 -> blas
-   * 2 -> kokkos
-   */
-   rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
-   if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
-      std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
-   }
-   else {
-     std::cout << "Cpp and Kokkos get same result" << std::endl;
-   }
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_kokkos_cuda = getElapsedTime(tic, toc);
+  
+  std::cout << "kokkos speedup of " << elapsedTime_manual_cuda/elapsedTime_kokkos_cuda << std::endl;
+  
+  //Now try the kokkos version without the copying of things in/out
+  double elapsedTime_kokkos_noCopyCuda = 0;
+  
+  for(int i = 0; i < 5; ++i){
+    contractFieldFieldTensor<Kokkos::Cuda>(out1_c_l_r, in_c_l_p_d_d, in_c_r_p_d_d, 2, &elapsedTime_kokkos_noCopyCuda);
+  }
+  
+  std::cout << "not counting copying yields a speedup of " << elapsedTime_manual_cuda/elapsedTime_kokkos_noCopyCuda << std::endl;
+
 
   return 0;
 }
