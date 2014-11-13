@@ -129,7 +129,7 @@ struct ContractFieldFieldVectorKokkosFunctor {
 enum ECompEngine {COMP_CPP, COMP_BLAS, COMP_KOKKOS};
 
 template <class Scalar>
-void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFields,
+void contractFieldFieldVector(threeDTensorArray<Scalar> &         outputFields,
                                     const fourDTensorArray<Scalar> &    leftFields,
                                     const fourDTensorArray<Scalar> &    rightFields,
                                     const ECompEngine           compEngine,
@@ -175,7 +175,6 @@ void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFi
       }
     }
     break;
-#if 0
     case COMP_KOKKOS: {
       typedef Kokkos::View<Scalar****> input_view_t;
       typedef Kokkos::View<Scalar***> output_view_t;
@@ -235,7 +234,6 @@ void contractFieldFieldVectorSerial(threeDTensorArray<Scalar> &         outputFi
       Kokkos::finalize();
     }
     break;
-#endif
   }
 }
 
@@ -263,7 +261,7 @@ int main(int argc, const char* argv[]) {
     }
   }
 
-  contractFieldFieldVectorSerial<double>(output, leftInput, rightInput, COMP_CPP, false);
+  contractFieldFieldVector<double>(output, leftInput, rightInput, COMP_CPP, false);
 
   for (unsigned int cl = 0; cl < dummySize; cl++) {
     for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
@@ -280,7 +278,7 @@ int main(int argc, const char* argv[]) {
 
   output.fill(1);
 
-  contractFieldFieldVectorSerial<double>(output, leftInput, rightInput, COMP_CPP, true);
+  contractFieldFieldVector<double>(output, leftInput, rightInput, COMP_CPP, true);
 
   for (unsigned int cl = 0; cl < dummySize; cl++) {
     for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
@@ -293,6 +291,39 @@ int main(int argc, const char* argv[]) {
     }
   }
   printf("passed serial, sumInto = true\n");
+
+  output.fill(1);
+
+  contractFieldFieldVector<double>(output, leftInput, rightInput, COMP_KOKKOS, true);
+
+  for (unsigned int cl = 0; cl < dummySize; cl++) {
+    for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
+      for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
+        if (output(cl, lbf, rbf) != 101) {
+          printf("Output at %d, %d, %d should be 101; instead is %f\n", cl, lbf, rbf, output(cl, lbf, rbf));
+          return 1;
+        }
+      }
+    }
+  }
+  printf("passed kokkos, sumInto = true\n");
+
+  output.fill(1);
+
+  contractFieldFieldVector<double>(output, leftInput, rightInput, COMP_KOKKOS, false);
+
+  for (unsigned int cl = 0; cl < dummySize; cl++) {
+    for (unsigned int lbf = 0; lbf < dummySize; lbf++) {
+      for (unsigned int rbf = 0; rbf < dummySize; rbf++) {
+        if (output(cl, lbf, rbf) != 100) {
+          printf("Output at %d, %d, %d should be 100; instead is %f\n", cl, lbf, rbf, output(cl, lbf, rbf));
+          return 1;
+        }
+      }
+    }
+  }
+
+  printf("passed kokkos, sumInto = false\n");
 
   return 0;
 }
