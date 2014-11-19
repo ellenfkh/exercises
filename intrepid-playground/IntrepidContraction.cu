@@ -35,6 +35,8 @@ using Intrepid::FieldContainer;
 
 typedef Intrepid::RealSpaceTools<double> rst;
 
+#define BLOCK_SIZE 64;
+
 //Pre-C++11 timing (thanks jeff)
 double getElapsedTime(const timespec start, const timespec end) {
 	timespec temp;
@@ -48,46 +50,86 @@ double getElapsedTime(const timespec start, const timespec end) {
 	return double(temp.tv_sec) + double(temp.tv_nsec) / 1e9;
 }
 
+
 __global__
 void
-cudaDoHistogramPopulation_kernel(unsigned int * d_input, unsigned int * d_output,
-	unsigned int numElements,
-	unsigned int bucketSize) {
-	
-	unsigned int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
+cudaDoContractFieldFieldTensor_kernel(double * d_left, double * d_right,
+  double * d_out,
+	int numCells,
+	int numLeftFields,
+  int numRightFields,
+  int numPoints,
+  int dim1Tensor,
+  int dim2Tensor) {
 
-	if(myID < numElements) {
-		const unsigned int value = d_input[myID];
-		const unsigned int bucketNumber = value / bucketSize;
-		atomicAdd(&(d_output[bucketNumber]), (int) 1);
+	int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+	if(myID < numCells) {
+		for (int lbf = 0; lbf < numLeftFields; lbf++) {
+      for (int rbf = 0; rbf < numRightFields; rbf++) {
+        double tmpVal = 0;
+        for (int qp = 0; qp < numPoints; qp++) {
+          for (int iTens1 = 0; iTens1 < dim1Tensor; iTens1++) {
+            for (int iTens2 = 0; iTens2 < dim2Tensor; iTens2++) {
+              tmpVal +=
+                d_left[lbf*numPoints*dim1Tensor*dim2Tensor*numCells +
+                    qp*dim1Tensor*dim2Tensor*numCells +
+                    iTens1*dim2Tensor*numCells + iTens2*numCells + myID]
+                *d_right[rbf*numPoints*dim1Tensor*dim2Tensor*numCells +
+                    qp*dim1Tensor*dim2Tensor*numCells +
+                    iTens1*dim2Tensor*numCells + iTens2*numCells + myID];
+            } // D2-loop
+          } // D1-loop
+        } // P-loop
+        d_out[lbf*numRightFields*numCells +
+            rbf*numCells + myID] = tmpVal;
+      } // R-loop
+    } // L-loop
 	}
 }
+
 void
-cudaDoHistogramPopulation(const unsigned int threadsPerBlock,
-		unsigned int * h_outputHistogram,
-		unsigned int * h_cudaInput,
-		unsigned int numElements,
-		unsigned int numBuckets) {
+cudaDoContractFieldFieldTensor(double * h_out,
+		double * h_inLeft,
+		double * h_inRight,
+		int numCells,
+		int numLeftFields,
+    int numRightFields,
+    int numPoints,
+    int dim1Tensor,
+    int dim2Tensor) {
 
-	unsigned int * d_input;
-	unsigned int * d_output;
-	cudaMalloc(&d_input, sizeof(unsigned int) * numElements);
-	cudaMalloc(&d_output, sizeof(unsigned int) * numBuckets);
-	cudaMemset(d_output, 0, sizeof(unsigned int) * numBuckets);
+	double * d_right;
+	double * d_left;
+  double * d_out;
 
-	cudaMemcpy(d_input, h_cudaInput,
-			sizeof(unsigned int) * numElements, cudaMemcpyHostToDevice);
+	cudaMalloc(&d_right, sizeof(double) * numCells * numRightFields * numPoints *
+              dim1Tensor * dim2Tensor);
 
-	dim3 blockSize(threadsPerBlock);
-	dim3 gridSize((numElements / threadsPerBlock) + 1);
-	const unsigned int bucketSize = numElements/numBuckets;
+	cudaMalloc(&d_left, sizeof(double) * numCells * numLeftFields * numPoints *
+              dim1Tensor * dim2Tensor);
 
-	cudaDoHistogramPopulation_kernel<<<gridSize, blockSize>>>(d_input, d_output,
-			numElements,
-			bucketSize);
+	cudaMemset(d_out, 0, sizeof(double) * numCells * numLeftFields *
+              numRightFields);
 
-	cudaMemcpy(h_outputHistogram, d_output, sizeof(unsigned int) * numBuckets,
-			cudaMemcpyDeviceToHost);
+	cudaMemcpy(d_right, h_inRight,
+			sizeof(double) * numCells * numRightFields * numPoints *
+                  dim1Tensor * dim2Tensor, cudaMemcpyHostToDevice);
+
+  cudaMemcpy(d_left, h_inLeft,
+      sizeof(double) * numCells * numLeftFields * numPoints *
+                  dim1Tensor * dim2Tensor, cudaMemcpyHostToDevice);
+
+
+	dim3 blockSize(BLOCK_SIZE);
+	dim3 gridSize((numCells / BLOCK_SIZE) + 1);
+
+	cudaDoContractFieldFieldTensor_kernel<<<gridSize, blockSize>>>(d_left,
+      d_right, d_out, numCells, numLeftFields,numRightFields,numPoints,
+      dim1Tensor, dim2Tensor);
+
+	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields *
+              numRightFields, cudaMemcpyDeviceToHost);
 
 }
 
@@ -301,7 +343,7 @@ void contractFieldFieldTensorSerial(FieldContainer<double> &  outputFields,
  * Kokkos Cuda contractfieldfieldtensor.
  *
  * Contracts two Kokkos Cuda host views (two double ***** tensors -> one double
- * *** tensor). Since 
+ * *** tensor). Since
  *
  * Note that all input and output is in Kokkos host views --- the user is
  * responsible for getting the data in and out of them.
@@ -446,6 +488,11 @@ int main(int argc, char* argv[]) {
 	typedef typename omp_input_view_t::HostMirror omp_input_host_t;
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
+  //Cuda arrays
+  double * cudaRight = new double[c * r * p * d1 * d2];
+  double * cudaLeft = new double[c * l * p * d1 * d2];
+  double * cudaOut = new double[c * l * r];
+
 	// Make equivalent Kokkos views
 	cuda_input_view_t cuda_kokkosLeft("left_input", c * l * p * d1 * d2);
 	cuda_input_view_t cuda_kokkosRight("right_input", c * r * p * d1 * d2);
@@ -464,7 +511,7 @@ int main(int argc, char* argv[]) {
 	omp_input_host_t omp_hostRight = Kokkos::create_mirror_view(omp_kokkosRight);
 	omp_output_host_t omp_hostOut = Kokkos::create_mirror_view(omp_kokkosOut);
 
-	// Copy into Kokkos host views.
+	// Copy into Kokkos host views and cuda
 	// Need to change this so that its 1-D and cl has stride 1
 	for (int cl = 0; cl < c; ++cl) {
 		for (int lbf = 0; lbf < l; ++lbf) {
@@ -475,6 +522,8 @@ int main(int argc, char* argv[]) {
 								cl) = in_c_l_p_d_d(cl, lbf, qp, iTens1, iTens2);
 						omp_hostLeft(lbf*p*d1*d2*c + qp*d1*d2*c + iTens1*d2*c + iTens2*c +
 								cl) = in_c_l_p_d_d(cl, lbf, qp, iTens1, iTens2);
+            cudaLeft[lbf*p*d1*d2*c + qp*d1*d2*c + iTens1*d2*c + iTens2*c +
+                cl] = in_c_l_p_d_d(cl, lbf, qp, iTens1, iTens2);
 					}
 				}
 			}
@@ -487,6 +536,8 @@ int main(int argc, char* argv[]) {
 								cl) = in_c_r_p_d_d(cl, rbf, qp, iTens1, iTens2);
 						omp_hostRight(rbf*p*d1*d2*c + qp*d1*d2*c + iTens1*d2*c + iTens2*c +
 								cl) = in_c_r_p_d_d(cl, rbf, qp, iTens1, iTens2);
+            cudaRight[rbf*p*d1*d2*c + qp*d1*d2*c + iTens1*d2*c + iTens2*c +
+                cl] = in_c_r_p_d_d(cl, rbf, qp, iTens1, iTens2);
 					}
 				}
 			}
@@ -583,13 +634,13 @@ int main(int argc, char* argv[]) {
 
 #if 0
 	//Warmpup
-	contractFieldFieldTensorKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t> 
+	contractFieldFieldTensorKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 		(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
 		 omp_kokkosLeft,omp_kokkosRight); clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldTensorKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t> 
+		contractFieldFieldTensorKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut, omp_kokkosLeft,
 			 omp_kokkosRight);
 	}
@@ -613,7 +664,7 @@ int main(int argc, char* argv[]) {
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldTensorKokkos1D<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t> 
+		contractFieldFieldTensorKokkos1D<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut, omp_kokkosLeft,
 			 omp_kokkosRight, c, l, r, p, d1, d2);
 	}
@@ -647,7 +698,7 @@ int main(int argc, char* argv[]) {
 	double elapsedTime_kokkos_noCopy = 0;
 
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldTensorKokkos1D<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t> 
+		contractFieldFieldTensorKokkos1D<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut, omp_kokkosLeft,
 			 omp_kokkosRight, c, l, r, p, d1, d2, &elapsedTime_kokkos_noCopy);
 	}
@@ -673,14 +724,14 @@ int main(int argc, char* argv[]) {
 
 	//Warmpup
 	contractFieldFieldTensorKokkos1D<Kokkos::Cuda, cuda_input_view_t,
-		cuda_output_view_t, cuda_input_host_t, cuda_output_host_t> 
+		cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 			(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
 			 cuda_kokkosLeft, cuda_kokkosRight, c, l, r, p, d1, d2);
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldTensorKokkos1D<Kokkos::Cuda, cuda_input_view_t, cuda_output_view_t, cuda_input_host_t, cuda_output_host_t> 
+		contractFieldFieldTensorKokkos1D<Kokkos::Cuda, cuda_input_view_t, cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 			(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
 			 cuda_kokkosLeft, cuda_kokkosRight, c, l, r, p, d1, d2);
 	}
@@ -709,7 +760,7 @@ int main(int argc, char* argv[]) {
 	double elapsedTime_kokkos_noCopyCuda = 0;
 
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldTensorKokkos1D<Kokkos::Cuda, cuda_input_view_t, cuda_output_view_t, cuda_input_host_t, cuda_output_host_t> 
+		contractFieldFieldTensorKokkos1D<Kokkos::Cuda, cuda_input_view_t, cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 			(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
 			 cuda_kokkosLeft, cuda_kokkosRight, c, l, r, p, d1, d2, &elapsedTime_kokkos_noCopyCuda);
 	}
@@ -730,6 +781,37 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "cuda kokkos no-copy speedup of " << elapsedTime_serial/elapsedTime_kokkos_noCopyCuda << std::endl;
 
-	Kokkos::finalize();
+  Kokkos::finalize();
+  
+  //Now try the cuda version, start with warmup
+  cudaDoContractFieldFieldTensor(cudaOut,cudaLeft,cudaRight, c, l, r,
+   p, d1, d2);
+
+  clock_gettime(CLOCK_MONOTONIC, &tic);
+  for(int i = 0; i < 5; ++i){
+    cudaDoContractFieldFieldTensor(cudaOut,cudaLeft,cudaRight, c, l, r,
+     p, d1, d2);
+  }
+
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_cuda = getElapsedTime(tic, toc);
+
+  for (int cl = 0; cl < c; ++cl) {
+    for (int lbf = 0; lbf < l; ++lbf) {
+      for (int rbf = 0; rbf < r; ++rbf) {
+        out1_c_l_r(cl, lbf, rbf) = cudaOut[lbf*r*c + rbf*c + cl];
+      }
+    }
+  }
+
+  rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+  if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
+    std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda; "
+      << " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
+  }
+
+  std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
+
+
 	return 0;
 }
