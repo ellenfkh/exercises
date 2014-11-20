@@ -274,8 +274,8 @@ int main(int argc, char* argv[]) {
 	typedef typename cuda_output_view_t::HostMirror cuda_output_host_t;
 
 	// Kokkos OpenMP views
-	typedef Kokkos::View<double **, Kokkos::LayoutRight, Kokkos::OpenMP> omp_input_view_t;
-	typedef Kokkos::View<double *, Kokkos::LayoutRight, Kokkos::OpenMP> omp_output_view_t;
+	typedef Kokkos::View<double **, Kokkos::LayoutLeft, Kokkos::OpenMP> omp_input_view_t;
+	typedef Kokkos::View<double *, Kokkos::LayoutLeft, Kokkos::OpenMP> omp_output_view_t;
 	typedef typename omp_input_view_t::HostMirror omp_input_host_t;
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
