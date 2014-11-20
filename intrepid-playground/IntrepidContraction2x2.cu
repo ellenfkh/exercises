@@ -152,7 +152,7 @@ struct contractDataDataScalarFunctor {
 		_leftFields(leftFields),
 		_rightFields(rightFields),
 		_outputFields(outputFields),
-		_numPoints(numPoints),
+		_numPoints(numPoints)
 	{
 		// Nothing to do
 	}
@@ -251,9 +251,9 @@ void contractDataDataScalarSerial(FieldContainer<double> &  outputFields,
 	for (int cl = 0; cl < numCells; cl++) {
 		double tmpVal = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			tmpVal += inputDataLeft(cl, qp)*inputDataRight(cl, qp);
+			tmpVal += leftFields(cl, qp)*rightFields(cl, qp);
 		} // P-loop
-		outputData(cl) += tmpVal;
+		outputFields(cl) = tmpVal;
 	} // C-loop
 }
 
@@ -360,21 +360,26 @@ void contractDataDataScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=5, p=9;
+	int c=500000, p=3;
 
 	FieldContainer<double> inl_c_p(c, p);
 	FieldContainer<double> inr_c_p(c, p);
 	FieldContainer<double> out1_c(c);
 	FieldContainer<double> out2_c(c);
-	double zero = INTREPID_TOL*10000.0;
-
+	double zero = Intrepid::INTREPID_TOL*10000.0;
+	double temp;
 	// fill with random numbers
 	for (int i=0; i<inl_c_p.size(); i++) {
-		inl_c_p[i] = Teuchos::ScalarTraits<double>::random();
+		temp = Teuchos::ScalarTraits<double>::random();
+		//std::cout << i << " " <<  temp << std::endl;
+		inl_c_p[i] = temp; 
 	}
-	for (int i=0; i<inr_c_p.size(); i++) {
-		inr_c_p[i] = Teuchos::ScalarTraits<double>::random();
+	for (int i=0; i<inr_c_p.size(); i++) {	
+		temp = Teuchos::ScalarTraits<double>::random();
+		//std::cout << i << " " <<  temp << std::endl;
+		inr_c_p[i] = temp;
 	}
+	std::cout << "Created vectors" << std::endl;
 
 	// ===============================================================
 	// ********************** < Kokkos setup> ************************
@@ -385,13 +390,13 @@ int main(int argc, char* argv[]) {
 	// device.
 
 	Kokkos::initialize();
-
+	
 	// Kokkos Cuda views
 	typedef Kokkos::View<double **, Kokkos::Cuda> cuda_input_view_t;
 	typedef Kokkos::View<double *, Kokkos::Cuda> cuda_output_view_t;
 	typedef typename cuda_input_view_t::HostMirror cuda_input_host_t;
 	typedef typename cuda_output_view_t::HostMirror cuda_output_host_t;
-
+	 
 	// Kokkos OpenMP views
 	typedef Kokkos::View<double **, Kokkos::OpenMP> omp_input_view_t;
 	typedef Kokkos::View<double *, Kokkos::OpenMP> omp_output_view_t;
@@ -403,18 +408,20 @@ int main(int argc, char* argv[]) {
 	double * cudaRight = new double[c * p];
 	double * cudaLeft = new double[c * p];
 	double * cudaOut = new double[c];
-	*/
+	 */
 
 	// Make equivalent Kokkos views
-	cuda_input_view_t cuda_kokkosLeft("left_input", c * p);
-	cuda_input_view_t cuda_kokkosRight("right_input", c * p);
+	
+	cuda_input_view_t cuda_kokkosLeft("left_input", c, p);
+	cuda_input_view_t cuda_kokkosRight("right_input", c, p);
 	cuda_output_view_t cuda_kokkosOut("output", c);
-
-	omp_input_view_t omp_kokkosLeft("left_input", c * p);
-	omp_input_view_t omp_kokkosRight("right_input",  c * p);
+	 
+	omp_input_view_t omp_kokkosLeft("left_input", c, p);
+	omp_input_view_t omp_kokkosRight("right_input",  c, p);
 	omp_output_view_t omp_kokkosOut("output", c);
 
 	// And their host mirrors
+	
 	cuda_input_host_t cuda_hostLeft = Kokkos::create_mirror_view(cuda_kokkosLeft);
 	cuda_input_host_t cuda_hostRight = Kokkos::create_mirror_view(cuda_kokkosRight);
 	cuda_output_host_t cuda_hostOut = Kokkos::create_mirror_view(cuda_kokkosOut);
@@ -425,13 +432,13 @@ int main(int argc, char* argv[]) {
 
 	// Copy into Kokkos host views and cuda
 	// Need to change this so that its 1-D and cl has stride 1
-	for (int cl = 0; cl < c; ++c) {
+	for (int cl = 0; cl < c; ++cl) {
 		for (int qp = 0; qp < p; ++qp) {
-			cuda_hostLeft(c,p) = inl_c_p(c,p);
-			omp_hostLeft(c,p) = inl_c_p(c,p);
+			cuda_hostLeft(cl,qp) = inl_c_p(cl,qp);
+			omp_hostLeft(cl,qp) = inl_c_p(cl,qp);
 
-			cuda_hostRight(c,p) = inr_c_p(c,p);
-			omp_hostRight(c,p) = inr_c_p(c,p);
+			cuda_hostRight(cl,qp) = inr_c_p(cl,qp);
+			omp_hostRight(cl,qp) = inr_c_p(cl,qp);
 		}
 	}
 
@@ -439,7 +446,7 @@ int main(int argc, char* argv[]) {
 	// ********************** </Kokkos setup> ************************
 	// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-	printf("trying serial\n");
+	std::cout << "trying serial" << std::endl;
 
 	//Warmup
 	contractDataDataScalarSerial(out2_c, inl_c_p, inr_c_p);
@@ -460,17 +467,17 @@ int main(int argc, char* argv[]) {
 
 	//Warmpup
 	contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
-	omp_output_view_t, omp_input_host_t, omp_output_host_t>
-	(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
-	omp_kokkosLeft, omp_kokkosRight);
+		omp_output_view_t, omp_input_host_t, omp_output_host_t>
+			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
+			 omp_kokkosLeft, omp_kokkosRight);
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
 		contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
-		omp_output_view_t, omp_input_host_t, omp_output_host_t>
-		(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
-		omp_kokkosLeft, omp_kokkosRight);
+			omp_output_view_t, omp_input_host_t, omp_output_host_t>
+				(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
+				 omp_kokkosLeft, omp_kokkosRight);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
@@ -478,17 +485,55 @@ int main(int argc, char* argv[]) {
 
 	// Copy out from kokkos output view (NOT timing this)
 	for (int cl = 0; cl < c; ++cl) {
+		//std::cout << omp_hostOut(cl) << std::endl;
 		out1_c(cl) = omp_hostOut(cl);
 	}
 
 	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
 	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
+			<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "kokkos omp speedup of " << elapsedTime_serial/elapsedTime_kokkos_omp << std::endl;
+	
+	printf("trying kokkos cuda\n");
 
+	//Warmpup
+	contractDataDataScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
+		cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
+			(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
+			 cuda_kokkosLeft, cuda_kokkosRight);
+	clock_gettime(CLOCK_MONOTONIC, &tic);
+
+	//repeat the calculation 5 times so we can average out some randomness
+	for(int i = 0; i < 5; ++i){
+		contractDataDataScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
+			cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
+				(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
+				 cuda_kokkosLeft, cuda_kokkosRight);
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, &toc);
+	const double elapsedTime_kokkos_cuda = getElapsedTime(tic, toc);
+
+	// Copy out from kokkos output view (NOT timing this)
+	for (int cl = 0; cl < c; ++cl) {
+		//std::cout << omp_hostOut(cl) << std::endl;
+		out1_c(cl) = omp_hostOut(cl);
+	}
+
+	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
+	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
+			<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+	}
+
+	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
+	
+	
+	
+	Kokkos::finalize();
 
 #if 0
 	//Warmpup
