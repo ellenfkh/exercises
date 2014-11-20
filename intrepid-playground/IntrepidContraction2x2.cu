@@ -63,7 +63,7 @@ cudaDocontractDataDataScalar_kernelColMajor(double * d_left, double * d_right,
 	if(myID < numCells) {
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myID + qp*numCells];
+			temp += d_left[myID + qp*numCells] * d_right[myID + qp*numCells];
 		}
 		d_out[myID]=temp;
 	}
@@ -81,7 +81,7 @@ int numPoints) {
 	if(myID < numCells) {
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myID + qp*numCells];
+			temp += d_left[myID*numPoints + qp] * d_right[myID*numPoints + qp];
 		}
 		d_out[myID]= temp;
 	}
@@ -123,6 +123,7 @@ cudaDoContractDataDataScalar(double * h_out,
 	else
 		cudaDocontractDataDataScalar_kernelRowMajor<<<gridSize, blockSize>>>(d_left,
 		d_right, d_out, numCells,numPoints);
+
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
 }
@@ -352,7 +353,7 @@ void contractDataDataScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=500000, p=3;
+	int c=50000, p=300;
 
 	FieldContainer<double> inl_c_p(c, p);
 	FieldContainer<double> inr_c_p(c, p);
@@ -533,8 +534,10 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
-
-	std::cout << "trying cuda" << std::endl;
+		
+	Kokkos::finalize();
+	/*
+	std::cout << "trying cuda col major" << std::endl;
 	//Now try the cuda version, start with warmup
 	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
 
@@ -556,11 +559,32 @@ int main(int argc, char* argv[]) {
 		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
-	std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
+	std::cout << "cuda col major speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
+	*/
+	std::cout << "trying cuda row major" << std::endl;
+	//Now try the cuda version, start with warmup
+	cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
 
-	Kokkos::finalize();
+	clock_gettime(CLOCK_MONOTONIC, &tic);
+	for(int i = 0; i < 5; ++i){
+		cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
+	}
 
+	clock_gettime(CLOCK_MONOTONIC, &toc);
+	const double elapsedTime_cudaRow = getElapsedTime(tic, toc);
 
+	for (int cl = 0; cl < c; ++cl) {
+			out1_c(cl) = cudaOut[cl];
+	}
+
+	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
+	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda; "
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+	}
+
+	std::cout << "cuda row major speedup of " << elapsedTime_serial/elapsedTime_cudaRow << std::endl;
+	
 
 #if 0
 	//Warmpup
