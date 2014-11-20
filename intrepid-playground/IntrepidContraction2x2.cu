@@ -63,9 +63,9 @@ cudaDocontractDataDataScalar_kernelColMajor(double * d_left, double * d_right,
 	if(myID < numCells) {
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myId + qp*numCells];
+			temp += d_left[myID + qp*numCells];
 		}
-		d_out[myID]
+		d_out[myID]=temp;
 	}
 }
 
@@ -81,14 +81,14 @@ int numPoints) {
 	if(myID < numCells) {
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myId + qp*numCells];
+			temp += d_left[myID + qp*numCells];
 		}
-		d_out[myID]
+		d_out[myID]= temp;
 	}
 }
 
 void
-cudaDocontractDataDataScalar(double * h_out,
+cudaDoContractDataDataScalar(double * h_out,
 		double * h_inLeft,
 		double * h_inRight,
 		int numCells,
@@ -119,10 +119,10 @@ cudaDocontractDataDataScalar(double * h_out,
 
 	if(colMajor)
 		cudaDocontractDataDataScalar_kernelColMajor<<<gridSize, blockSize>>>(d_left,
-			d_right, d_out, numCells,numPoints,);
+			d_right, d_out, numCells,numPoints);
 	else
 		cudaDocontractDataDataScalar_kernelRowMajor<<<gridSize, blockSize>>>(d_left,
-		d_right, d_out, numCells,numPoints,);
+		d_right, d_out, numCells,numPoints);
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
 }
@@ -536,11 +536,11 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "trying cuda" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractFieldFieldTensor(cudaOut,cudaLeft,cudaRight, c, p, 1);
+	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDoContractFieldFieldTensor(cudaOut,cudaLeft,cudaRight, c, p, 1);
+		cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
@@ -550,10 +550,10 @@ int main(int argc, char* argv[]) {
 			out1_c(cl) = cudaOut[cl];
 	}
 
-	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
-	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
+	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
