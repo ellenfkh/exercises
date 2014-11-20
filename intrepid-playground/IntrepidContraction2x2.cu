@@ -126,6 +126,10 @@ cudaDoContractDataDataScalar(double * h_out,
 
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
+  cudaFree(d_right);
+  cudaFree(d_left);
+  cudaFree(d_out);
+
 }
 
 
@@ -160,73 +164,6 @@ struct contractDataDataScalarFunctor {
 			_outputFields(elementIndex) = tmpVal;
 		}
 };
-
-
-
-
-template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
-struct contractDataDataScalarFunctor1D {
-	typedef DeviceType device_type;
-	LeftViewType _leftFields;
-	RightViewType _rightFields;
-	OutputViewType _outputFields;
-	int _numLeftFields;
-	int _numRightFields;
-	int _numPoints;
-	int _dim1Tensor;
-	int _dim2Tensor;
-	int _numCells;
-
-	contractDataDataScalarFunctor1D(LeftViewType leftFields,
-			RightViewType rightFields,
-			OutputViewType outputFields,
-			int numLeftFields,
-			int numRightFields,
-			int numPoints,
-			int dim1Tensor,
-			int dim2Tensor,
-			int numCells) :
-		_leftFields(leftFields),
-		_rightFields(rightFields),
-		_outputFields(outputFields),
-		_numLeftFields(numLeftFields),
-		_numRightFields(numRightFields),
-		_numPoints(numPoints),
-		_dim1Tensor(dim1Tensor),
-		_dim2Tensor(dim2Tensor),
-		_numCells(numCells)
-	{
-		// Nothing to do
-	}
-
-	KOKKOS_INLINE_FUNCTION
-		void operator()(const unsigned int elementIndex) const {
-
-			for (int lbf = 0; lbf < _numLeftFields; lbf++) {
-				for (int rbf = 0; rbf < _numRightFields; rbf++) {
-					double tmpVal = 0;
-					for (int qp = 0; qp < _numPoints; qp++) {
-						for (int iTens1 = 0; iTens1 < _dim1Tensor; iTens1++) {
-							for (int iTens2 = 0; iTens2 < _dim2Tensor; iTens2++) {
-								tmpVal +=
-									_leftFields(lbf*_numPoints*_dim1Tensor*_dim2Tensor*_numCells +
-											qp*_dim1Tensor*_dim2Tensor*_numCells +
-											iTens1*_dim2Tensor*_numCells + iTens2*_numCells + elementIndex)
-									*_rightFields(rbf*_numPoints*_dim1Tensor*_dim2Tensor*_numCells +
-											qp*_dim1Tensor*_dim2Tensor*_numCells +
-											iTens1*_dim2Tensor*_numCells + iTens2*_numCells + elementIndex);
-							} // D2-loop
-						} // D1-loop
-					} // P-loop
-					_outputFields(lbf*_numRightFields*_numCells +
-							rbf*_numCells + elementIndex) = tmpVal;
-				} // R-loop
-			} // L-loop
-		}
-};
-
-
-
 
 
 // Serial contractDataDataScalar.  Contracts FieldContainers of doubles.
@@ -297,63 +234,9 @@ void contractDataDataScalarKokkos(output_host_t &   outHost,
 	Kokkos::deep_copy(outHost, outDevice);
 }
 
-
-template <class DeviceType, class input_view_t, class output_view_t, class input_host_t, class output_host_t>
-void contractDataDataScalarKokkos1D(output_host_t &   outHost,
-		const input_host_t &                      leftHost,
-		const input_host_t &                      rightHost,
-		output_view_t &                           outDevice,
-		input_view_t &                            leftDevice,
-		input_view_t &                            rightDevice,
-		int   numCells,
-		int numLeftFields,
-		int numRightFields,
-		int numPoints,
-		int dim1Tensor,
-		int dim2Tensor,
-		double *                                  time = 0
-		) {
-	/*
-	// get sizes
-	int numCells        = leftHost.dimension(0);
-	int numLeftFields   = leftHost.dimension(1);
-	int numRightFields  = rightHost.dimension(1);
-	int numPoints       = leftHost.dimension(2);
-	int dim1Tensor      = leftHost.dimension(3);
-	int dim2Tensor      = leftHost.dimension(4);
-	 */
-
-
-	// Deep copy Kokkos host views into device views
-	Kokkos::deep_copy(leftDevice, leftHost);
-	Kokkos::deep_copy(rightDevice, rightHost);
-	Kokkos::deep_copy(outDevice, outHost);
-
-	timespec tic;
-	if(time != 0)
-		clock_gettime(CLOCK_MONOTONIC, &tic);
-
-	contractDataDataScalarFunctor1D<DeviceType, input_view_t, input_view_t, output_view_t>
-		kokkosFunctor(leftDevice, rightDevice, outDevice, numLeftFields,
-				numRightFields, numPoints, dim1Tensor, dim2Tensor, numCells);
-
-	Kokkos::parallel_for(numCells, kokkosFunctor);
-
-	Kokkos::fence();
-
-	timespec toc;
-	if(time !=0){
-		clock_gettime(CLOCK_MONOTONIC, &toc);
-		*time += getElapsedTime(tic, toc);
-	}
-
-	Kokkos::deep_copy(outHost, outDevice);
-}
-
-
-
 int main(int argc, char* argv[]) {
-	int c=50000, p=300;
+	int c=1000000, p=24;
+  int numRepeats = 10;
 
 	FieldContainer<double> inl_c_p(c, p);
 	FieldContainer<double> inr_c_p(c, p);
@@ -459,7 +342,7 @@ int main(int argc, char* argv[]) {
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
-	for(int i = 0; i < 5; ++i){
+	for(int i = 0; i < numRepeats; ++i){
 		contractDataDataScalarSerial(out2_c, inl_c_p, inr_c_p);
 	}
 
@@ -477,7 +360,7 @@ int main(int argc, char* argv[]) {
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
-	for(int i = 0; i < 5; ++i){
+	for(int i = 0; i < numRepeats; ++i){
 		contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
 			omp_output_view_t, omp_input_host_t, omp_output_host_t>
 				(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
@@ -511,7 +394,7 @@ int main(int argc, char* argv[]) {
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
-	for(int i = 0; i < 5; ++i){
+	for(int i = 0; i < numRepeats; ++i){
 		contractDataDataScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
 			cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 				(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
@@ -536,14 +419,14 @@ int main(int argc, char* argv[]) {
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
 		
 	Kokkos::finalize();
-	/*
+	
 	std::cout << "trying cuda col major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, true);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
-	for(int i = 0; i < 5; ++i){
-		cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+	for(int i = 0; i < numRepeats; ++i){
+		cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, true);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
@@ -560,14 +443,14 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "cuda col major speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
-	*/
+	
 	std::cout << "trying cuda row major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
+	cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, false);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
-	for(int i = 0; i < 5; ++i){
-		cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
+	for(int i = 0; i < numRepeats; ++i){
+		cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, false);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
@@ -585,32 +468,6 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "cuda row major speedup of " << elapsedTime_serial/elapsedTime_cudaRow << std::endl;
 	
-
-#if 0
-	//Warmpup
-	contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
-		(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
-		 omp_kokkosLeft,omp_kokkosRight); clock_gettime(CLOCK_MONOTONIC, &tic);
-
-	//repeat the calculation 5 times so we can average out some randomness
-	for(int i = 0; i < 5; ++i){
-		contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
-			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut, omp_kokkosLeft,
-			 omp_kokkosRight);
-	}
-
-	clock_gettime(CLOCK_MONOTONIC, &toc);
-	const double elapsedTime_kokkos = getElapsedTime(tic, toc);
-
-	// Copy out from kokkos output view (NOT timing this)
-	for (int cl = 0; cl < c; ++cl) {
-		for (int lbf = 0; lbf < l; ++lbf) {
-			for (int rbf = 0; rbf < r; ++rbf) {
-				out1_c_l_r(cl, lbf, rbf) = omp_hostOut(cl, lbf, rbf);
-			}
-		}
-	}
-#endif
 
 	return 0;
 }
