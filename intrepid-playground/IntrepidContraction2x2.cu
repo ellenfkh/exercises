@@ -372,9 +372,9 @@ int main(int argc, char* argv[]) {
 	for (int i=0; i<inl_c_p.size(); i++) {
 		temp = Teuchos::ScalarTraits<double>::random();
 		//std::cout << i << " " <<  temp << std::endl;
-		inl_c_p[i] = temp; 
+		inl_c_p[i] = temp;
 	}
-	for (int i=0; i<inr_c_p.size(); i++) {	
+	for (int i=0; i<inr_c_p.size(); i++) {
 		temp = Teuchos::ScalarTraits<double>::random();
 		//std::cout << i << " " <<  temp << std::endl;
 		inr_c_p[i] = temp;
@@ -390,13 +390,13 @@ int main(int argc, char* argv[]) {
 	// device.
 
 	Kokkos::initialize();
-	
+
 	// Kokkos Cuda views
 	typedef Kokkos::View<double **, Kokkos::Cuda> cuda_input_view_t;
 	typedef Kokkos::View<double *, Kokkos::Cuda> cuda_output_view_t;
 	typedef typename cuda_input_view_t::HostMirror cuda_input_host_t;
 	typedef typename cuda_output_view_t::HostMirror cuda_output_host_t;
-	 
+
 	// Kokkos OpenMP views
 	typedef Kokkos::View<double **, Kokkos::OpenMP> omp_input_view_t;
 	typedef Kokkos::View<double *, Kokkos::OpenMP> omp_output_view_t;
@@ -411,17 +411,17 @@ int main(int argc, char* argv[]) {
 	 */
 
 	// Make equivalent Kokkos views
-	
+
 	cuda_input_view_t cuda_kokkosLeft("left_input", c, p);
 	cuda_input_view_t cuda_kokkosRight("right_input", c, p);
 	cuda_output_view_t cuda_kokkosOut("output", c);
-	 
+
 	omp_input_view_t omp_kokkosLeft("left_input", c, p);
 	omp_input_view_t omp_kokkosRight("right_input",  c, p);
 	omp_output_view_t omp_kokkosOut("output", c);
 
 	// And their host mirrors
-	
+
 	cuda_input_host_t cuda_hostLeft = Kokkos::create_mirror_view(cuda_kokkosLeft);
 	cuda_input_host_t cuda_hostRight = Kokkos::create_mirror_view(cuda_kokkosRight);
 	cuda_output_host_t cuda_hostOut = Kokkos::create_mirror_view(cuda_kokkosOut);
@@ -496,7 +496,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos omp speedup of " << elapsedTime_serial/elapsedTime_kokkos_omp << std::endl;
-	
+
 	printf("trying kokkos cuda\n");
 
 	//Warmpup
@@ -530,10 +530,12 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
-	
-	
-	
+
+
+
 	Kokkos::finalize();
+
+
 
 #if 0
 	//Warmpup
