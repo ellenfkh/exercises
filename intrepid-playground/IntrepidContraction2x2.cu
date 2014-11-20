@@ -114,8 +114,8 @@ cudaDoContractDataDataScalar(double * h_out,
 			sizeof(double) * numCells * numPoints, cudaMemcpyHostToDevice);
 
 
-	dim3 blockSize(64);
-	dim3 gridSize((numCells / 64) + 1);
+	dim3 blockSize(1024);
+	dim3 gridSize((numCells / 1024) + 1);
 
 	if(colMajor)
 		cudaDocontractDataDataScalar_kernelColMajor<<<gridSize, blockSize>>>(d_left,
