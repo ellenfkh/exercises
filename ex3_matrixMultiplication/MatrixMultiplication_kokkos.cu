@@ -12,6 +12,8 @@
 
 using std::string;
 using std::vector;
+typedef Kokkos::View<double *> matrixView_type;
+typedef matrixView_type::HostMirror host_matrix;
 
 enum KokkosDeepCopyStyle {KokkosDoDeepCopiesEveryRepeat,
                           KokkosDontDoDeepCopiesEveryRepeat};
@@ -76,14 +78,38 @@ runKokkosTest(const unsigned int matrixSize,
   typedef typename KokkosLeftMatrix::HostMirror   KokkosLeftMatrix_Host;
   typedef typename KokkosRightMatrix::HostMirror  KokkosRightMatrix_Host;
 
-  // TODO: make device views for left, right, and result
-  // TODO: make host views for left, right, and result
-
-  // TODO: copy contents of leftMatrix and rightMatrix into device views
-
-  // TODO: make a kokkos functor
-
   // (optional) warm up kokkos
+  KokkosLeftMatrix left("left", matrixSize, matrixSize);
+  KokkosRightMatrix right("right", matrixSize, matrixSize);
+  KokkosLeftMatrix warmup("warmup", matrixSize, matrixSize);
+  KokkosLeftMatrix result("result", matrixSize, matrixSize);
+
+  KokkosLeftMatrix_Host h_left = Kokkos::create_mirror_view(left);
+  KokkosRightMatrix_Host h_right = Kokkos::create_mirror_view(right);
+  KokkosLeftMatrix_Host h_warmup = Kokkos::create_mirror_view(warmup);
+  KokkosLeftMatrix_Host h_result = Kokkos::create_mirror_view(result);
+
+  for(unsigned row = 0; row < matrixSize; ++row) {
+    for(unsigned col = 0; col < matrixSize; ++col) {
+      h_left(row, col) = leftMatrix[row * matrixSize + col];
+      h_right(row, col) = rightMatrix[row * matrixSize + col];
+      h_result(row, col) = 0;
+      h_warmup(row, col) = 0;
+    }
+  }
+
+  Kokkos::deep_copy(left, h_left);
+  Kokkos::deep_copy(right, h_right);
+  Kokkos::deep_copy(result, h_result);
+  Kokkos::deep_copy(warmup, h_warmup);
+
+  KokkosFunctor<DeviceType, KokkosLeftMatrix, KokkosRightMatrix> kokkosFunctor
+                                            (matrixSize, left, right, result);
+
+  KokkosFunctor<DeviceType, KokkosLeftMatrix, KokkosRightMatrix> warmupFunctor
+                                            (matrixSize, left, right, warmup);
+
+  Kokkos::parallel_for(matrixSize*matrixSize, warmupFunctor);
 
   // start timing
   timespec tic;
@@ -92,13 +118,9 @@ runKokkosTest(const unsigned int matrixSize,
   for (unsigned int repeatIndex = 0;
        repeatIndex < numberOfRepeats; ++repeatIndex) {
 
-    // (optional) copy left and right matrices to device?
-
-    // TODO: do the multiplication with kokkos
-    // TODO: wait for the multiplication to finish
-
-    // (optional) copy result view back to host?
-
+    Kokkos::parallel_for(matrixSize*matrixSize, kokkosFunctor);
+    Kokkos::fence();
+    Kokkos::deep_copy(h_result, result);
   }
 
   // stop timing
@@ -111,7 +133,7 @@ runKokkosTest(const unsigned int matrixSize,
   // TODO: do you need to copy result matrix to host?
   for (unsigned int row = 0; row < matrixSize; ++row) {
     for (unsigned int col = 0; col < matrixSize; ++col) {
-      //checkSum += // TODO: something
+      checkSum += h_result(row, col);
     }
   }
   printf("checkSum is %lf\n", checkSum);

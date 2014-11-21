@@ -33,36 +33,69 @@ using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
 
-class TbbFunctor {
+class myFunctor {
 public:
+  myFunctor() {
 
-  TbbFunctor(const array<double, 2> bounds) {
   }
 
-  TbbFunctor(const TbbFunctor & other,
-             tbb::split) {
+  double operator()(double functionInput) {
+    return std::sin(functionInput);
+  }
+};
+
+class TbbOutputter {
+public:
+
+  const double startingPoint_;
+
+  const double dx_;
+
+  myFunctor function_;
+
+  double sum_;
+
+  TbbOutputter(const double startingPoint, const double dx, myFunctor
+    function) :
+    startingPoint_(startingPoint), dx_(dx), function_(function), sum_(0) {
+  }
+
+  TbbOutputter(const TbbOutputter & other,
+               tbb::split) :
+    startingPoint_(other.startingPoint_), dx_(other.dx_),
+    function_(other.function_), sum_(0) {
+
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) {
+
+    double sum = sum_;
+
+    for(unsigned int i=range.begin(); i!= range.end(); ++i )
+            sum += function_(startingPoint_ + (double(i) + .5) * dx_);
+
+    sum_ = sum;
   }
 
-  void join(const TbbFunctor & other) {
+  void join(const TbbOutputter & other) {
+    sum_ += other.sum_;
   }
 
 private:
-  TbbFunctor();
+  TbbOutputter();
 
 };
 
 struct KokkosFunctor {
+  typedef double value_type;
+  const double dx_;
 
-  const double _dx;
+  KokkosFunctor(double dx): dx_(dx) {}
 
-  KokkosFunctor(const double dx) : _dx(dx) {
-  }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const unsigned int intervalIndex) const {
+  void operator()(int intervalIndex, double &sum) const {
+    sum += std::sin((double(intervalIndex) + .5)*dx_);
   }
 
 private:
@@ -74,7 +107,7 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned long numberOfIntervals = 1e8;
+  const unsigned long numberOfIntervals = 1e6;
   // the integration bounds
   const array<double, 2> bounds = {{0, 1.314}};
 
@@ -161,7 +194,7 @@ int main(int argc, char* argv[]) {
   // ===============================================================
   // ********************** < do tbb> ******************************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-
+  myFunctor function;
   printf("performing calculations with tbb\n");
   // for each number of threads
   for (const unsigned int numberOfThreads :
@@ -170,24 +203,24 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    // prepare the tbb functor.
-    TbbFunctor tbbFunctor(bounds);
+    TbbOutputter tbbOutputter(bounds[0], dx, function);
 
     // start timing
     tic = high_resolution_clock::now();
     // dispatch threads
-    parallel_reduce(tbb::blocked_range<size_t>(0, 0),
-                    tbbFunctor);
+    parallel_reduce(tbb::blocked_range<size_t>(0, numberOfIntervals),
+                    tbbOutputter);
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
       duration_cast<duration<double> >(toc - tic).count();
 
     // somehow get the threaded integral answer
-    const double threadedIntegral = 0;
+    const double threadedIntegral = tbbOutputter.sum_ * dx;
     // check the answer
     const double threadedRelativeError =
       std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
+
     if (threadedRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               threadedIntegral, libraryAnswer);
@@ -216,14 +249,18 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreads :
          numberOfThreadsArray) {
 
-    // TODO: set the number of threads for openmp
-
+    double threadedIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
 
-    double threadedIntegral = 0;
-    // TODO: do scalar integration with threads on openmp
+    omp_set_num_threads(numberOfThreads);
 
+    #pragma omp parallel for reduction(+:threadedIntegral)
+      for(unsigned int i = 0; i < numberOfIntervals; i += 1) {
+        threadedIntegral += std::sin((double(i)+.5)*dx + bounds[0]);
+      }
+
+    threadedIntegral *= dx;
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
@@ -232,10 +269,10 @@ int main(int argc, char* argv[]) {
     // check the answer
     const double threadedRelativeError =
       std::abs(libraryAnswer - threadedIntegral) / std::abs(libraryAnswer);
-    if (threadedRelativeError > 1e-3) {
+    if (threadedRelativeError > 1) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               threadedIntegral, libraryAnswer);
-      exit(1);
+      //exit(1);
     }
 
     // output speedup
@@ -267,14 +304,12 @@ int main(int argc, char* argv[]) {
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
+    double cudaIntegral = 0;
     // start timing
     tic = high_resolution_clock::now();
-
-    double cudaIntegral = 0;
-    // TODO: do scalar integration with cuda for this number of threads per block
     cudaDoScalarIntegration(numberOfThreadsPerBlock,
-                            &cudaIntegral);
-
+                            &cudaIntegral, bounds[0],
+                            numberOfIntervals, dx);
     // stop timing
     toc = high_resolution_clock::now();
     const double cudaElapsedTime =
@@ -282,11 +317,11 @@ int main(int argc, char* argv[]) {
 
     // check the answer
     const double cudaRelativeError =
-      std::abs(libraryAnswer - cudaIntegral) / std::abs(libraryAnswer);
+      std::abs(float(libraryAnswer) - cudaIntegral) / std::abs(libraryAnswer);
     if (cudaRelativeError > 1e-3) {
       fprintf(stderr, "our answer is too far off: %15.8e instead of %15.8e\n",
               cudaIntegral, libraryAnswer);
-      exit(1);
+      //exit(1);
     }
 
     // output speedup
@@ -310,14 +345,16 @@ int main(int argc, char* argv[]) {
 
   Kokkos::initialize();
 
-  const KokkosFunctor kokkosFunctor(dx);
+  //const funct KokkosFunctor();
 
   // start timing
   tic = high_resolution_clock::now();
 
-  const double kokkosIntegral = 0;
-  // TODO: calculate integral using kokkos
+  double kokkosIntegral = 0;
 
+  Kokkos::parallel_reduce(numberOfIntervals, KokkosFunctor(dx),kokkosIntegral);
+
+  kokkosIntegral *= dx;
   // stop timing
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =

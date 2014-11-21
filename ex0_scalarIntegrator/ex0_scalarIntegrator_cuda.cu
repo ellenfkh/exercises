@@ -1,33 +1,87 @@
 // -*- C++ -*-
 #include <cstdio>
-
+#include <cmath>
 #include <cuda_runtime.h>
 
 #include "ex0_scalarIntegrator_cuda.cuh"
 
-#define MAX_NUMBER_OF_PUPPIES 3
-
-__constant__ double constantPuppies[MAX_NUMBER_OF_PUPPIES];
-
 __global__
 void
-cudaDoScalarIntegration_kernel(double* output) {
+cudaDoScalarIntegration_kernel(double bounds, unsigned long
+                              numberOfIntervals, double dx, double *partial) {
   // block-wide reduction storage, size is determined by third kernel
   // launch argument (thing between <<< and >>>)
   extern __shared__ double contributions[];
 
-  // TODO: do scalar integration somehow
+  unsigned int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-  // reading from global memory
-  *output = 5;
+  if(myID < numberOfIntervals) {
+    const double evaluationPoint =
+      bounds + (double(myID) + 0.5) * dx;
+    contributions[threadIdx.x] = std::sin(evaluationPoint);
+  }
+
+  __syncthreads();
+
+  if(threadIdx.x == 0) {
+    for(int i = 1; i < blockDim.x; ++i) {
+      contributions[0] += contributions[i];
+    }
+    partial[blockIdx.x] = contributions[0];
+  }
 
 }
 
 void
 cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
-                        double * const output) {
+                        double * const output, double bounds,
+                        unsigned long numberOfIntervals, double dx) {
+
+  
+  const unsigned int gridSize = (numberOfIntervals / numberOfThreadsPerBlock) + 1;
+
+  // run the kernel
+
+  double *partialResults;
+  cudaMalloc((void **) &partialResults, gridSize * sizeof(double));
+  cudaMemset(partialResults, 0, sizeof(double));
+
+  cudaDoScalarIntegration_kernel<<<gridSize,
+    numberOfThreadsPerBlock,
+    numberOfThreadsPerBlock*sizeof(double)>>>(bounds, numberOfIntervals, dx,
+                                              partialResults);
+
+  // make sure that everything in flight has been completed
+  cudaDeviceSynchronize();
+
+  double h_partialResults[gridSize];
+  cudaMemcpy(h_partialResults, partialResults, sizeof(double) * gridSize,
+            cudaMemcpyDeviceToHost);
+
+  double finalSum = 0;
+  for(unsigned int index = 0; index < gridSize; ++index) {
+    finalSum += h_partialResults[index];
+  }
+
+  *output = finalSum * dx;
+
+
 
   // TODO: you have to do stuff in here, the junk below is just to show syntax
+  /*
+  double *d_partial;
+  double cudaIntegral = 0;
+  unsigned long chunkPerThread = numberOfIntervals/numberOfThreads + 1;
+  cudaMalloc( (void**)&d_partial, sizeof(double)*numberOfThreadsPerBlock);
+  sumSection<<<1,numberOfThreadsPerBlock>>>(bounds[0], chunkPerThread, d_partial,
+                                            numberOfIntervals, dx);
+  cudaDeviceSynchronize();
+
+  sum<<<1,1>>>(d_partial, numberOfThreadsPerBlock);
+
+  cudaMemcpy(&cudaIntegral, d_partial, sizeof(double), cudaMemcpyDeviceToHost);
+
+
 
   // this is how to use constant memory:
   // make some stuff that we'll copy into constant memory
@@ -78,4 +132,5 @@ cudaDoScalarIntegration(const unsigned int numberOfThreadsPerBlock,
   // clean up
   cudaFree(dev_junk);
   cudaFree(dev_output);
+  */
 }

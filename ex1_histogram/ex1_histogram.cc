@@ -20,54 +20,78 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_scheduler_init.h>
-
+#include <tbb/atomic.h>
 // header files for cuda implementation
 #include "ex1_histogram_cuda.cuh"
 
 // header files for kokkos
 #include <Kokkos_Core.hpp>
-
+#include <Kokkos_Vector.hpp>
 using std::string;
 using std::vector;
 using std::array;
 using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::duration_cast;
+using tbb::atomic;
+typedef Kokkos::View<unsigned long *> bucketView_type;
 
-class TbbFunctor {
+
+class TbbOutputter {
 public:
 
-  const unsigned int _numberOfBuckets;
+  vector<unsigned int> * input_;
 
-  TbbFunctor(const unsigned int numberOfBuckets) :
-    _numberOfBuckets(numberOfBuckets) {
+  vector<atomic<unsigned long>> * result_;
+
+  TbbOutputter(vector<unsigned int> * input, vector<atomic<unsigned long>> * result):
+    input_(input), result_(result){
+
   }
 
-  TbbFunctor(const TbbFunctor & other,
-             tbb::split) :
-    _numberOfBuckets(other._numberOfBuckets) {
+  TbbOutputter(const TbbOutputter & other,
+               tbb::split)
+               : input_(other.input_), result_(other.result_){
+    //printf("split copy constructor called\n");
   }
 
   void operator()(const tbb::blocked_range<size_t> & range) {
+    //printf("TbbOutputter asked to process range from %7zu to %7zu\n",
+           //range.begin(), range.end());
+
+    unsigned long bucketSize = input_->size()/result_->size();
+    for(unsigned long i=range.begin(); i!= range.end(); ++i ) {
+      unsigned int value= (*input_)[i];
+      result_->at(value/bucketSize).fetch_and_increment();
+    }
   }
 
-  void join(const TbbFunctor & other) {
+  void join(const TbbOutputter & other) {
+
   }
 
 private:
-  TbbFunctor();
+  TbbOutputter();
 
 };
 
 struct KokkosFunctor {
 
-  const unsigned int _bucketSize;
+  const unsigned int bucketSize_;
+  vector<unsigned int> * input_;
+  bucketView_type buckets_;
 
-  KokkosFunctor(const double bucketSize) : _bucketSize(bucketSize) {
+  KokkosFunctor(const double bucketSize, vector<unsigned int> * input,
+		bucketView_type buckets) : bucketSize_(bucketSize), input_(input),
+					buckets_(buckets)
+  {
+
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const unsigned int elementIndex) const {
+    unsigned int value = input_->at(elementIndex);
+    Kokkos::atomic_fetch_add(&buckets_(value/bucketSize_),1);
   }
 
 private:
@@ -79,9 +103,9 @@ int main(int argc, char* argv[]) {
 
   // a couple of inputs.  change the numberOfIntervals to control the amount
   //  of work done
-  const unsigned int numberOfElements = 1e7;
+  const unsigned int numberOfElements = 1e8;
   // The number of buckets in our histogram
-  const unsigned int numberOfBuckets = 1e3;
+  const unsigned int numberOfBuckets = 1e6;
 
   // these are c++ timers...for timing
   high_resolution_clock::time_point tic;
@@ -98,25 +122,20 @@ int main(int argc, char* argv[]) {
   // ********************** < do slow serial> **********************
   // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-  vector<unsigned int> slowSerialHistogram(numberOfBuckets, 0);
+  vector<unsigned int> slowSerialHistogram(numberOfBuckets);
   tic = high_resolution_clock::now();
   const unsigned int bucketSize = input.size()/numberOfBuckets;
   for (unsigned int index = 0; index < numberOfElements; ++index) {
     const unsigned int value = input[index];
     const unsigned int bucketNumber = value / bucketSize;
-    ++slowSerialHistogram[bucketNumber];
+    slowSerialHistogram[bucketNumber] += 1;
   }
   toc = high_resolution_clock::now();
   const double slowSerialElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
-
-  for (unsigned int bucketIndex = 0;
-       bucketIndex < numberOfBuckets; ++bucketIndex) {
-    if (slowSerialHistogram[bucketIndex] != bucketSize) {
-      fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-              bucketIndex, slowSerialHistogram[bucketIndex], bucketSize);
-      exit(1);
-    }
+  for(unsigned int bucketIndex = 0; bucketIndex < numberOfBuckets; ++bucketIndex){
+    if(slowSerialHistogram[bucketIndex]!= bucketSize)
+      fprintf(stderr, "wrong");
   }
 
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -132,7 +151,13 @@ int main(int argc, char* argv[]) {
 
   // TODO: can you make the serial one go faster? i can get about a
   //  15-20% speedup, but that's about it.  not very interesting
+  // TODO: do this better
 
+  for (unsigned int index = 0; index < numberOfElements; ++index) {
+    const unsigned int value = input[index];
+    const unsigned int bucketNumber = value / bucketSize;
+    fastSerialHistogram[bucketNumber] += 1;
+  }
   toc = high_resolution_clock::now();
   const double fastSerialElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
@@ -179,29 +204,26 @@ int main(int argc, char* argv[]) {
     // initialize tbb's threading system for this number of threads
     tbb::task_scheduler_init init(numberOfThreads);
 
-    // TODO: do tbb stuff
-
-    // prepare the tbb functor.
-    TbbFunctor tbbFunctor(numberOfBuckets);
+    vector<atomic<unsigned long>> results(numberOfBuckets,0);
+    TbbOutputter tbbOutputter(&input, &results);
 
     // start timing
     tic = high_resolution_clock::now();
     // dispatch threads
     parallel_reduce(tbb::blocked_range<size_t>(0, numberOfElements,
                                                grainSize),
-                    tbbFunctor);
+                    tbbOutputter);
     // stop timing
     toc = high_resolution_clock::now();
     const double threadedElapsedTime =
       duration_cast<duration<double> >(toc - tic).count();
 
     // check the answer
-    vector<unsigned int> tbbHistogram(numberOfBuckets, 0);
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
-      if (tbbHistogram[bucketIndex] != bucketSize) {
+      if (results[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-                bucketIndex, unsigned(tbbHistogram[bucketIndex]),
+                bucketIndex, unsigned(results[bucketIndex]),
                 bucketSize);
         exit(1);
       }
@@ -237,7 +259,12 @@ int main(int argc, char* argv[]) {
     // start timing
     tic = high_resolution_clock::now();
 
-    // TODO: do openmp
+    #pragma omp parallel for
+      for(unsigned int i = 0; i < input.size(); ++i) {
+        #pragma omp atomic update
+          ompHistogram[input[i]/bucketSize] += 1;
+      }
+
 
     // stop timing
     toc = high_resolution_clock::now();
@@ -279,21 +306,25 @@ int main(int argc, char* argv[]) {
   threadsPerBlockArray.push_back(256);
   threadsPerBlockArray.push_back(512);
 
-  printf("performing calculations with cuda\n");
+  unsigned int * h_cudaInput = new unsigned int[numberOfElements];
+  unsigned int * h_cudaOutput = new unsigned int[numberOfBuckets];
+
+  for(unsigned int index = 0; index < numberOfElements; ++index) {
+    h_cudaInput[index] = input[index];
+  }
+
   // for each number of threads per block
   for (const unsigned int numberOfThreadsPerBlock :
          threadsPerBlockArray) {
 
-    vector<unsigned int> cudaHistogram(numberOfBuckets, 0);
-
     // start timing
     tic = high_resolution_clock::now();
 
-    // TODO: do cuda stuff
+
 
     // do scalar integration with cuda for this number of threads per block
-    cudaDoHistogramPopulation(numberOfThreadsPerBlock,
-                              &cudaHistogram[0]);
+    cudaDoHistogramPopulation(numberOfThreadsPerBlock, h_cudaOutput,
+                              h_cudaInput, numberOfElements, numberOfBuckets);
 
     // stop timing
     toc = high_resolution_clock::now();
@@ -303,10 +334,12 @@ int main(int argc, char* argv[]) {
     // check the answer
     for (unsigned int bucketIndex = 0;
          bucketIndex < numberOfBuckets; ++bucketIndex) {
-      if (cudaHistogram[bucketIndex] != bucketSize) {
+      if (h_cudaOutput[bucketIndex] != bucketSize) {
         fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-                bucketIndex, cudaHistogram[bucketIndex], bucketSize);
-        exit(1);
+                bucketIndex, h_cudaOutput[bucketIndex], bucketSize);
+        //exit(1);
+
+
       }
     }
 
@@ -330,23 +363,25 @@ int main(int argc, char* argv[]) {
 
   Kokkos::initialize();
 
+  bucketView_type results("A", numberOfBuckets);
+
   // start timing
   tic = high_resolution_clock::now();
 
-  // TODO: do kokkos stuff
+
+  Kokkos::parallel_for(input.size(), KokkosFunctor(bucketSize, &input, results));
 
   // stop timing
+
   toc = high_resolution_clock::now();
   const double kokkosElapsedTime =
     duration_cast<duration<double> >(toc - tic).count();
 
-  // check the answer
-  vector<unsigned int> kokkosHistogram(numberOfBuckets, 0);
   for (unsigned int bucketIndex = 0;
        bucketIndex < numberOfBuckets; ++bucketIndex) {
-    if (kokkosHistogram[bucketIndex] != bucketSize) {
-      fprintf(stderr, "bucket %u has the wrong value: %u instead of %u\n",
-              bucketIndex, kokkosHistogram[bucketIndex], bucketSize);
+    if (results(bucketIndex) != bucketSize) {
+      fprintf(stderr, "bucket %u has the wrong value: %u instead of %lu\n",
+              bucketIndex, results(bucketIndex), bucketSize);
       exit(1);
     }
   }
