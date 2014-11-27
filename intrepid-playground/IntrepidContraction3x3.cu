@@ -127,7 +127,7 @@ cudaDocontractFieldFieldScalar(double * h_out,
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
 }
-
+/*
 __global__
 void
 cudaDocontractFieldFieldScalar_kernelUnrolled(double * d_left, double * d_right,
@@ -143,7 +143,7 @@ int numPoints) {
 		d_out[myID]= temp;
 	}
 }
-
+*/
 void
 cudaDocontractFieldFieldScalarUnrolled(double * h_out,
 double * h_inLeft,
