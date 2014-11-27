@@ -315,7 +315,7 @@ void contractFieldFieldScalarSerial(FieldContainer<double> &  outputFields,
 		} // L-loop
 	} // C-loop
 }
-}
+
 
 /*
  * Kokkos Cuda contractFieldFieldScalar.
