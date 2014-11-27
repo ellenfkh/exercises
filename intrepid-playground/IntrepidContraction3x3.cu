@@ -53,7 +53,7 @@ double getElapsedTime(const timespec start, const timespec end) {
 
 __global__
 void
-cudaDocontractDataDataScalar_kernelColMajor(double * d_left, double * d_right,
+cudaDocontractFieldFieldScalar_kernelColMajor(double * d_left, double * d_right,
 		double * d_out,
 		int numCells,
 		int numPoints) {
@@ -71,7 +71,7 @@ cudaDocontractDataDataScalar_kernelColMajor(double * d_left, double * d_right,
 
 __global__
 void
-cudaDocontractDataDataScalar_kernelRowMajor(double * d_left, double * d_right,
+cudaDocontractFieldFieldScalar_kernelRowMajor(double * d_left, double * d_right,
 double * d_out,
 int numCells,
 int numPoints) {
@@ -88,7 +88,7 @@ int numPoints) {
 }
 
 void
-cudaDoContractDataDataScalar(double * h_out,
+cudaDocontractFieldFieldScalar(double * h_out,
 		double * h_inLeft,
 		double * h_inRight,
 		int numCells,
@@ -118,10 +118,10 @@ cudaDoContractDataDataScalar(double * h_out,
 	dim3 gridSize((numCells / 64) + 1);
 
 	if(colMajor)
-		cudaDocontractDataDataScalar_kernelColMajor<<<gridSize, blockSize>>>(d_left,
+		cudaDocontractFieldFieldScalar_kernelColMajor<<<gridSize, blockSize>>>(d_left,
 			d_right, d_out, numCells,numPoints);
 	else
-		cudaDocontractDataDataScalar_kernelRowMajor<<<gridSize, blockSize>>>(d_left,
+		cudaDocontractFieldFieldScalar_kernelRowMajor<<<gridSize, blockSize>>>(d_left,
 		d_right, d_out, numCells,numPoints);
 
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
@@ -130,7 +130,7 @@ cudaDoContractDataDataScalar(double * h_out,
 
 __global__
 void
-cudaDocontractDataDataScalar_kernelUnrolled(double * d_left, double * d_right,
+cudaDocontractFieldFieldScalar_kernelUnrolled(double * d_left, double * d_right,
 double * d_out,
 int numCells,
 int numPoints) {
@@ -145,7 +145,7 @@ int numPoints) {
 }
 
 void
-cudaDoContractDataDataScalarUnrolled(double * h_out,
+cudaDocontractFieldFieldScalarUnrolled(double * h_out,
 double * h_inLeft,
 double * h_inRight,
 int numCells,
@@ -174,42 +174,50 @@ bool colMajor) {
 	dim3 blockSize(64);
 	dim3 gridSize((numPoints / 64) + 1, (numCells / 64) + 1);
 
-	cudaDocontractDataDataScalar_kernelUnrolled<<<gridSize, blockSize>>>(d_left,
+	cudaDocontractFieldFieldScalar_kernelUnrolled<<<gridSize, blockSize>>>(d_left,
 	d_right, d_out, numCells,numPoints);
 
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
 }
 
-
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
-struct contractDataDataScalarFunctor {
+struct contractFieldFieldScalarFunctor {
 	typedef DeviceType device_type;
 	LeftViewType _leftFields;
 	RightViewType _rightFields;
 	OutputViewType _outputFields;
 	int _numPoints;
+	int _numLeftFields;
+	int _numRightFields;
 
-	contractDataDataScalarFunctor(LeftViewType leftFields,
+	contractFieldFieldScalarFunctor(LeftViewType leftFields,
 			RightViewType rightFields,
 			OutputViewType outputFields,
+			int numLeftFields,
+			int numRightFields,
 			int numPoints) :
 		_leftFields(leftFields),
 		_rightFields(rightFields),
 		_outputFields(outputFields),
-		_numPoints(numPoints)
+		_numPoints(numPoints),
+		_numLeftFields(numLeftFields),
+		_numRightFields(numRightFields)
 	{
 		// Nothing to do
 	}
 
 	KOKKOS_INLINE_FUNCTION
 		void operator()(const unsigned int elementIndex) const {
-			double tmpVal = 0;
-			for (int qp = 0; qp < _numPoints; qp++) {
-				tmpVal += _leftFields(elementIndex, qp)*_rightFields(elementIndex, qp);
-			} // D2-loop
-
-			_outputFields(elementIndex) = tmpVal;
+			for (int lbf = 0; lbf < _numLeftFields; lbf++) {
+				for (int rbf = 0; rbf < _numRightFields; rbf++) {
+					double tmpVal = 0;
+					for (int qp = 0; qp < _numPoints; qp++) {
+						tmpVal += _leftFields(elementIndex, lbf, qp)*_rightFields(elementIndex, rbf, qp);
+					} // P-loop
+					_outputFields(elementIndex, lbf, rbf) = tmpVal;
+				} // R-loop
+			} // L-loop
 		}
 };
 
@@ -217,7 +225,7 @@ struct contractDataDataScalarFunctor {
 
 
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
-struct contractDataDataScalarFunctor1D {
+struct contractFieldFieldScalarFunctor1D {
 	typedef DeviceType device_type;
 	LeftViewType _leftFields;
 	RightViewType _rightFields;
@@ -229,7 +237,7 @@ struct contractDataDataScalarFunctor1D {
 	int _dim2Tensor;
 	int _numCells;
 
-	contractDataDataScalarFunctor1D(LeftViewType leftFields,
+	contractFieldFieldScalarFunctor1D(LeftViewType leftFields,
 			RightViewType rightFields,
 			OutputViewType outputFields,
 			int numLeftFields,
@@ -281,8 +289,8 @@ struct contractDataDataScalarFunctor1D {
 
 
 
-// Serial contractDataDataScalar.  Contracts FieldContainers of doubles.
-void contractDataDataScalarSerial(FieldContainer<double> &  outputFields,
+// Serial contractFieldFieldScalar.  Contracts FieldContainers of doubles.
+void contractFieldFieldScalarSerial(FieldContainer<double> &  outputFields,
 		const FieldContainer<double> &              leftFields,
 		const FieldContainer<double> &              rightFields,
 		double *                                    time = 0) {
@@ -290,29 +298,36 @@ void contractDataDataScalarSerial(FieldContainer<double> &  outputFields,
 	// TODO(ellen): Might later want to template this so that both the container
 	//              and the scalars inside the container are template arguments,
 	//              so we can hand it kokkos views or custom structs.
-	int numCells      = leftFields.dimension(0);
-	int numPoints     = leftFields.dimension(1);
+	int numCells        = leftFields.dimension(0);
+	int numLeftFields   = leftFields.dimension(1);
+	int numRightFields  = rightFields.dimension(1);
+	int numPoints       = leftFields.dimension(2);
 
 	for (int cl = 0; cl < numCells; cl++) {
-		double tmpVal = 0;
-		for (int qp = 0; qp < numPoints; qp++) {
-			tmpVal += leftFields(cl, qp)*rightFields(cl, qp);
-		} // P-loop
-		outputFields(cl) = tmpVal;
+		for (int lbf = 0; lbf < numLeftFields; lbf++) {
+			for (int rbf = 0; rbf < numRightFields; rbf++) {
+				double tmpVal = 0;
+				for (int qp = 0; qp < numPoints; qp++) {
+					tmpVal += leftFields(cl, lbf, qp)*rightFields(cl, rbf, qp);
+				} // P-loop
+				outputFields(cl, lbf, rbf) = tmpVal;
+			} // R-loop
+		} // L-loop
 	} // C-loop
+}
 }
 
 /*
- * Kokkos Cuda contractDataDataScalar.
+ * Kokkos Cuda contractFieldFieldScalar.
  *
- * Contracts two Kokkos Cuda host views (two double ***** tensors -> one double
+ * Contracts two Kokkos Cuda host views (two double *** tensors -> one double
  * *** tensor). Since
  *
  * Note that all input and output is in Kokkos host views --- the user is
  * responsible for getting the data in and out of them.
  */
 template <class DeviceType, class input_view_t, class output_view_t, class input_host_t, class output_host_t>
-void contractDataDataScalarKokkos(output_host_t &   outHost,
+void contractFieldFieldScalarKokkos(output_host_t &   outHost,
 		const input_host_t &                      leftHost,
 		const input_host_t &                      rightHost,
 		output_view_t &                           outDevice,
@@ -321,8 +336,10 @@ void contractDataDataScalarKokkos(output_host_t &   outHost,
 		double *                                  time = 0) {
 
 	// get sizes
-	int numCells        = leftHost.dimension(0);
-	int numPoints       = leftHost.dimension(1);
+	int numCells        = leftFields.dimension(0);
+	int numLeftFields   = leftFields.dimension(1);
+	int numRightFields  = rightFields.dimension(1);
+	int numPoints       = leftFields.dimension(2);
 
 	// Deep copy Kokkos host views into device views
 	Kokkos::deep_copy(leftDevice, leftHost);
@@ -333,8 +350,9 @@ void contractDataDataScalarKokkos(output_host_t &   outHost,
 	if(time != 0)
 		clock_gettime(CLOCK_MONOTONIC, &tic);
 
-	contractDataDataScalarFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
-		kokkosFunctor(leftDevice, rightDevice, outDevice, numPoints);
+	contractFieldFieldScalarFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
+		kokkosFunctor(leftDevice, rightDevice, outDevice, numLeftFields,
+		numRightFields, numPoints);
 
 	Kokkos::parallel_for(numCells, kokkosFunctor);
 
@@ -351,7 +369,7 @@ void contractDataDataScalarKokkos(output_host_t &   outHost,
 
 
 template <class DeviceType, class input_view_t, class output_view_t, class input_host_t, class output_host_t>
-void contractDataDataScalarKokkos1D(output_host_t &   outHost,
+void contractFieldFieldScalarKokkos1D(output_host_t &   outHost,
 		const input_host_t &                      leftHost,
 		const input_host_t &                      rightHost,
 		output_view_t &                           outDevice,
@@ -385,7 +403,7 @@ void contractDataDataScalarKokkos1D(output_host_t &   outHost,
 	if(time != 0)
 		clock_gettime(CLOCK_MONOTONIC, &tic);
 
-	contractDataDataScalarFunctor1D<DeviceType, input_view_t, input_view_t, output_view_t>
+	contractFieldFieldScalarFunctor1D<DeviceType, input_view_t, input_view_t, output_view_t>
 		kokkosFunctor(leftDevice, rightDevice, outDevice, numLeftFields,
 				numRightFields, numPoints, dim1Tensor, dim2Tensor, numCells);
 
@@ -405,24 +423,20 @@ void contractDataDataScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=500000, p=30;
+	int c=5, p=9, l=3, r=7;
 
-	FieldContainer<double> inl_c_p(c, p);
-	FieldContainer<double> inr_c_p(c, p);
-	FieldContainer<double> out1_c(c);
-	FieldContainer<double> out2_c(c);
-	double zero = Intrepid::INTREPID_TOL*10000.0;
-	double temp;
+	FieldContainer<double> in_c_l_p(c, l, p);
+	FieldContainer<double> in_c_r_p(c, r, p);
+	FieldContainer<double> out1_c_l_r(c, l, r);
+	FieldContainer<double> out2_c_l_r_l_r_l_r(c, l, r);
+	double zero = INTREPID_TOL*10000.0;
+
 	// fill with random numbers
-	for (int i=0; i<inl_c_p.size(); i++) {
-		temp = Teuchos::ScalarTraits<double>::random();
-		//std::cout << i << " " <<  temp << std::endl;
-		inl_c_p[i] = temp;
+	for (int i=0; i<in_c_l_p.size(); i++) {
+		in_c_l_p[i] = Teuchos::ScalarTraits<double>::random();
 	}
-	for (int i=0; i<inr_c_p.size(); i++) {
-		temp = Teuchos::ScalarTraits<double>::random();
-		//std::cout << i << " " <<  temp << std::endl;
-		inr_c_p[i] = temp;
+	for (int i=0; i<in_c_r_p.size(); i++) {
+		in_c_r_p[i] = Teuchos::ScalarTraits<double>::random();
 	}
 	std::cout << "Created vectors" << std::endl;
 
@@ -437,36 +451,37 @@ int main(int argc, char* argv[]) {
 	Kokkos::initialize();
 
 	// Kokkos Cuda views
-	typedef Kokkos::View<double **, Kokkos::Cuda> cuda_input_view_t;
-	typedef Kokkos::View<double *, Kokkos::Cuda> cuda_output_view_t;
+	typedef Kokkos::View<double ***, Kokkos::Cuda> cuda_input_view_t;
+	typedef Kokkos::View<double ***, Kokkos::Cuda> cuda_output_view_t;
 	typedef typename cuda_input_view_t::HostMirror cuda_input_host_t;
 	typedef typename cuda_output_view_t::HostMirror cuda_output_host_t;
 
 	// Kokkos OpenMP views
-	typedef Kokkos::View<double **, Kokkos::OpenMP> omp_input_view_t;
-	typedef Kokkos::View<double *, Kokkos::OpenMP> omp_output_view_t;
+	typedef Kokkos::View<double ***, Kokkos::OpenMP> omp_input_view_t;
+	typedef Kokkos::View<double ***, Kokkos::OpenMP> omp_output_view_t;
 	typedef typename omp_input_view_t::HostMirror omp_input_host_t;
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
 
 	//Cuda arrays
+	/*
 	double * cudaRightColMajor = new double[c * p];
 	double * cudaLeftColMajor = new double[c * p];
 	double * cudaRightRowMajor = new double[c * p];
 	double * cudaLeftRowMajor = new double[c * p];
 
 	double * cudaOut = new double[c];
-
+	*/
 
 	// Make equivalent Kokkos views
 
-	cuda_input_view_t cuda_kokkosLeft("left_input", c, p);
-	cuda_input_view_t cuda_kokkosRight("right_input", c, p);
-	cuda_output_view_t cuda_kokkosOut("output", c);
+	cuda_input_view_t cuda_kokkosLeft("left_input", c,l, p);
+	cuda_input_view_t cuda_kokkosRight("right_input", c, r, p);
+	cuda_output_view_t cuda_kokkosOut("output", c, l, r );
 
-	omp_input_view_t omp_kokkosLeft("left_input", c, p);
-	omp_input_view_t omp_kokkosRight("right_input",  c, p);
-	omp_output_view_t omp_kokkosOut("output", c);
+	omp_input_view_t omp_kokkosLeft("left_input", c, l, p);
+	omp_input_view_t omp_kokkosRight("right_input",  c,r, p);
+	omp_output_view_t omp_kokkosOut("output", c,l ,r);
 
 	// And their host mirrors
 
@@ -482,17 +497,19 @@ int main(int argc, char* argv[]) {
 	// Need to change this so that its 1-D and cl has stride 1
 	for (int cl = 0; cl < c; ++cl) {
 		for (int qp = 0; qp < p; ++qp) {
-			cuda_hostLeft(cl,qp) = inl_c_p(cl,qp);
-			omp_hostLeft(cl,qp) = inl_c_p(cl,qp);
+			for(int rbf = 0; rbf < r; ++rbf) {
+				cuda_hostRight(cl,rbf, qp) = in_c_r_p(cl,rbf,qp);
+				omp_hostRight(cl,rbf,qp) = in_c_r_p(cl,rbf,qp);
+			}
+			for(int lbf = 0; lbf < l; ++lbf) {
+				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
+				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
+			}
+			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
+			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
 
-			cuda_hostRight(cl,qp) = inr_c_p(cl,qp);
-			omp_hostRight(cl,qp) = inr_c_p(cl,qp);
-
-			cudaRightColMajor[cl + c*qp] = inr_c_p(cl,qp);
-			cudaLeftColMajor[cl + c*qp] = inl_c_p(cl,qp);
-
-			cudaRightRowMajor[cl * p + qp] = inr_c_p(cl,qp);
-			cudaLeftRowMajor[cl * p + qp] = inl_c_p(cl,qp);
+			//cudaRightRowMajor[cl * p + qp] = in_r_c_p(cl,qp);
+			//cudaLeftRowMajor[cl * p + qp] = in_l_c_p(cl,qp);
 		}
 	}
 
@@ -505,14 +522,14 @@ int main(int argc, char* argv[]) {
 	std::cout << "trying serial" << std::endl;
 
 	//Warmup
-	contractDataDataScalarSerial(out2_c, inl_c_p, inr_c_p);
+	contractFieldFieldScalarSerial(out2_c_l_r, in_l_c_p, in_r_c_p);
 
 	timespec tic;
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractDataDataScalarSerial(out2_c, inl_c_p, inr_c_p);
+		contractFieldFieldScalarSerial(out2_c_l_r, in_l_c_p, in_r_c_p);
 	}
 
 	timespec toc;
@@ -522,7 +539,7 @@ int main(int argc, char* argv[]) {
 	printf("trying kokkos openmp\n");
 
 	//Warmpup
-	contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
+	contractFieldFieldScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
 		omp_output_view_t, omp_input_host_t, omp_output_host_t>
 			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
 			 omp_kokkosLeft, omp_kokkosRight);
@@ -530,7 +547,7 @@ int main(int argc, char* argv[]) {
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
+		contractFieldFieldScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
 			omp_output_view_t, omp_input_host_t, omp_output_host_t>
 				(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
 				 omp_kokkosLeft, omp_kokkosRight);
@@ -541,14 +558,17 @@ int main(int argc, char* argv[]) {
 
 	// Copy out from kokkos output view (NOT timing this)
 	for (int cl = 0; cl < c; ++cl) {
-		//std::cout << omp_hostOut(cl) << std::endl;
-		out1_c(cl) = omp_hostOut(cl);
+		for(int lbf = 0; lbf < l; ++lbf) {
+			for(int rbf = 0; rbf < r; ++rbf) {
+				out1_c_l_r(cl,lbf,rbf) = omp_hostOut(cl,lbf,rbf);
+			}
+		}
 	}
 
-	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
-	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
-			<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+			<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "kokkos omp speedup of " << elapsedTime_serial/elapsedTime_kokkos_omp << std::endl;
@@ -556,7 +576,7 @@ int main(int argc, char* argv[]) {
 	printf("trying kokkos cuda\n");
 
 	//Warmpup
-	contractDataDataScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
+	contractFieldFieldScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
 		cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 			(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
 			 cuda_kokkosLeft, cuda_kokkosRight);
@@ -564,7 +584,7 @@ int main(int argc, char* argv[]) {
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractDataDataScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
+		contractFieldFieldScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
 			cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 				(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
 				 cuda_kokkosLeft, cuda_kokkosRight);
@@ -575,14 +595,17 @@ int main(int argc, char* argv[]) {
 
 	// Copy out from kokkos output view (NOT timing this)
 	for (int cl = 0; cl < c; ++cl) {
-		//std::cout << omp_hostOut(cl) << std::endl;
-		out1_c(cl) = omp_hostOut(cl);
+		for(int lbf = 0; lbf < l; ++lbf) {
+			for(int rbf = 0; rbf < r; ++rbf) {
+				out1_c_l_r(cl,lbf,rbf) = omp_hostOut(cl,lbf,rbf);
+			}
+		}
 	}
 
-	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
-	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
-			<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+			<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
@@ -591,86 +614,87 @@ int main(int argc, char* argv[]) {
 	/*
 	std::cout << "trying cuda col major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+	cudaDocontractFieldFieldScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_cuda = getElapsedTime(tic, toc);
 
 	for (int cl = 0; cl < c; ++cl) {
-			out1_c(cl) = cudaOut[cl];
+			out1_c_l_r(cl) = cudaOut[cl];
 	}
 
-	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
-	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "cuda col major speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
 	*/
+	/*
 	std::cout << "trying cuda row major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
+	cudaDocontractFieldFieldScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, 0);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_cudaRow = getElapsedTime(tic, toc);
 
 	for (int cl = 0; cl < c; ++cl) {
-			out1_c(cl) = cudaOut[cl];
+			out1_c_l_r(cl) = cudaOut[cl];
 	}
 
-	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
-	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "cuda row major speedup of " << elapsedTime_serial/elapsedTime_cudaRow << std::endl;
 
 	std::cout << "trying cuda thread-per-index" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDoContractDataDataScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
+	cudaDocontractFieldFieldScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDoContractDataDataScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
+		cudaDocontractFieldFieldScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_cudaUnrolled = getElapsedTime(tic, toc);
 
 	for (int cl = 0; cl < c; ++cl) {
-		out1_c(cl) = cudaOut[cl];
+		out1_c_l_r(cl) = cudaOut[cl];
 	}
 
-	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
-	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
+	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
 		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda unrolled; "
-		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
 	std::cout << "cuda unrolled speedup of " << elapsedTime_serial/elapsedTime_cudaUnrolled << std::endl;
-
+	*/
 
 #if 0
 	//Warmpup
-	contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
+	contractFieldFieldScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 		(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut,
 		 omp_kokkosLeft,omp_kokkosRight); clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractDataDataScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
+		contractFieldFieldScalarKokkos<Kokkos::OpenMP, omp_input_view_t, omp_output_view_t, omp_input_host_t, omp_output_host_t>
 			(omp_hostOut, omp_hostLeft, omp_hostRight, omp_kokkosOut, omp_kokkosLeft,
 			 omp_kokkosRight);
 	}
