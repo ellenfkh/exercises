@@ -71,7 +71,7 @@ cudaDocontractFieldFieldScalar_kernelColMajor(double * d_left, double * d_right,
 
 __global__
 void
-cudaDocontractFieldFieldScalar_kernelRowMajor(double * d_left, double * d_right,
+cudaDocontractFieldFieldScalar_kernel(double * d_left, double * d_right,
 double * d_out,
 int numCells,
 int numLeftFields,
@@ -87,7 +87,6 @@ int numPoints) {
 		int matrixRow = matrixIndex / numRightFields;
 		int matrixCol = matrixIndex % numRightFields;
 
-		tmpVal += leftFields(cl, lbf, qp)*rightFields(cl, rbf, qp);
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
 			temp += d_left[myMatrix*numPoints*numLeftFields + matrixRow*numPoints + qp] *
@@ -129,10 +128,9 @@ cudaDocontractFieldFieldScalar(double * h_out,
 	dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
 
 	cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
-			d_right, d_out, numCells, numLeftCells, numRightCells, numPoints);
+			d_right, d_out, numCells, numLeftFields, numRightFields, numPoints);
 
-	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftCells,
-									numRightCells, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
 
 }
 /*
@@ -514,7 +512,7 @@ int main(int argc, char* argv[]) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
 
-				cudaLeft[cl * p * r + lbf * p + qp] = in_c_ls_p(cl,lbf,qp);
+				cudaLeft[cl * p * r + lbf * p + qp] = in_c_l_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
@@ -638,7 +636,6 @@ int main(int argc, char* argv[]) {
 	for (int cl = 0; cl < c; ++cl) {
 		for(int lbf = 0; lbf < l; ++lbf) {
 			for(int rbf = 0; rbf < r; ++rbf) {
-				cudaOut[cl];
 				out1_c_l_r(cl,lbf,rbf) = cudaOut[cl * l * r + lbf * r + rbf];
 			}
 		}
