@@ -74,14 +74,24 @@ void
 cudaDocontractFieldFieldScalar_kernelRowMajor(double * d_left, double * d_right,
 double * d_out,
 int numCells,
+int numLeftFields,
+int numRightFields,
 int numPoints) {
 
 	int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	if(myID < numCells) {
+	if(myID < (numCells * numLeftFields * numRightFields)) {
+		int myMatrix = myID / (numLeftFields * numRightFields);
+		int matrixIndex = myID % (numLeftFields * numRightFields);
+
+		int matrixRow = matrixIndex / numRightFields;
+		int matrixCol = matrixIndex % numRightFields;
+
+		tmpVal += leftFields(cl, lbf, qp)*rightFields(cl, rbf, qp);
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myID*numPoints + qp] * d_right[myID*numPoints + qp];
+			temp += d_left[myMatrix*numPoints*numLeftFields + matrixRow*numPoints + qp] *
+							d_right[myMatrix*numPoints*numRightFields + matrixCol*numPoints + qp];
 		}
 		d_out[myID]= temp;
 	}
@@ -92,39 +102,37 @@ cudaDocontractFieldFieldScalar(double * h_out,
 		double * h_inLeft,
 		double * h_inRight,
 		int numCells,
-		int numPoints,
-		bool colMajor) {
+		int numLeftFields,
+		int numRightFields,
+		int numPoints) {
 
 	double * d_right;
 	double * d_left;
 	double * d_out;
 
-	cudaMalloc(&d_right, sizeof(double) * numCells  * numPoints);
+	cudaMalloc(&d_right, sizeof(double) * numCells  * numPoints * numRightFields);
 
-	cudaMalloc(&d_left, sizeof(double) * numCells * numPoints);
+	cudaMalloc(&d_left, sizeof(double) * numCells * numPoints * numLeftFields);
 
-	cudaMalloc(&d_out, sizeof(double) * numCells);
+	cudaMalloc(&d_out, sizeof(double) * numCells * numRightFields * numLeftFields);
 
-	cudaMemset(d_out, 0, sizeof(double) * numCells);
+	cudaMemset(d_out, 0, sizeof(double) * numCells * numRightFields * numLeftFields);
 
 	cudaMemcpy(d_right, h_inRight,
-			sizeof(double) * numCells * numPoints, cudaMemcpyHostToDevice);
+			sizeof(double) * numCells * numPoints * numRightFields, cudaMemcpyHostToDevice);
 
 	cudaMemcpy(d_left, h_inLeft,
-			sizeof(double) * numCells * numPoints, cudaMemcpyHostToDevice);
+			sizeof(double) * numCells * numPoints * numLeftFields, cudaMemcpyHostToDevice);
 
 
-	dim3 blockSize(64);
-	dim3 gridSize((numCells / 64) + 1);
+	dim3 blockSize(1024);
+	dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
 
-	if(colMajor)
-		cudaDocontractFieldFieldScalar_kernelColMajor<<<gridSize, blockSize>>>(d_left,
-			d_right, d_out, numCells,numPoints);
-	else
-		cudaDocontractFieldFieldScalar_kernelRowMajor<<<gridSize, blockSize>>>(d_left,
-		d_right, d_out, numCells,numPoints);
+	cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
+			d_right, d_out, numCells, numLeftCells, numRightCells, numPoints);
 
-	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftCells,
+									numRightCells, cudaMemcpyDeviceToHost);
 
 }
 /*
@@ -465,14 +473,12 @@ int main(int argc, char* argv[]) {
 
 
 	//Cuda arrays
-	/*
-	double * cudaRightColMajor = new double[c * p];
-	double * cudaLeftColMajor = new double[c * p];
-	double * cudaRightRowMajor = new double[c * p];
-	double * cudaLeftRowMajor = new double[c * p];
 
-	double * cudaOut = new double[c];
-	*/
+	double * cudaRight = new double[c * r * p];
+	double * cudaLeft = new double[c * l * p];
+
+	double * cudaOut = new double[c * l * r];
+
 
 	// Make equivalent Kokkos views
 
@@ -501,10 +507,14 @@ int main(int argc, char* argv[]) {
 			for(int rbf = 0; rbf < r; ++rbf) {
 				cuda_hostRight(cl,rbf, qp) = in_c_r_p(cl,rbf,qp);
 				omp_hostRight(cl,rbf,qp) = in_c_r_p(cl,rbf,qp);
+
+				cudaRight[cl * p * r + rbf * p + qp] = in_c_r_p(cl,rbf,qp);
 			}
 			for(int lbf = 0; lbf < l; ++lbf) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
+
+				cudaLeft[cl * p * r + lbf * p + qp] = in_c_ls_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
@@ -612,21 +622,26 @@ int main(int argc, char* argv[]) {
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
 
 	Kokkos::finalize();
-	/*
-	std::cout << "trying cuda col major" << std::endl;
+
+	std::cout << "trying cuda major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDocontractFieldFieldScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+	cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
 
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDocontractFieldFieldScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, 1);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_cuda = getElapsedTime(tic, toc);
 
 	for (int cl = 0; cl < c; ++cl) {
-			out1_c_l_r(cl) = cudaOut[cl];
+		for(int lbf = 0; lbf < l; ++lbf) {
+			for(int rbf = 0; rbf < r; ++rbf) {
+				cudaOut[cl];
+				out1_c_l_r(cl,lbf,rbf) = cudaOut[cl * l * r + lbf * r + rbf];
+			}
+		}
 	}
 
 	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
@@ -635,8 +650,8 @@ int main(int argc, char* argv[]) {
 		<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
-	std::cout << "cuda col major speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
-	*/
+	std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
+
 	/*
 	std::cout << "trying cuda row major" << std::endl;
 	//Now try the cuda version, start with warmup
