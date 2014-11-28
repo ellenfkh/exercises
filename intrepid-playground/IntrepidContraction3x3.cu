@@ -144,6 +144,7 @@ int numPoints) {
 	}
 }
 */
+/*
 void
 cudaDocontractFieldFieldScalarUnrolled(double * h_out,
 double * h_inLeft,
@@ -180,7 +181,7 @@ bool colMajor) {
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
 
 }
-
+*/
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
 struct contractFieldFieldScalarFunctor {
 	typedef DeviceType device_type;
@@ -336,10 +337,10 @@ void contractFieldFieldScalarKokkos(output_host_t &   outHost,
 		double *                                  time = 0) {
 
 	// get sizes
-	int numCells        = leftFields.dimension(0);
-	int numLeftFields   = leftFields.dimension(1);
-	int numRightFields  = rightFields.dimension(1);
-	int numPoints       = leftFields.dimension(2);
+	int numCells        = leftHost.dimension(0);
+	int numLeftFields   = leftHost.dimension(1);
+	int numRightFields  = rightHost.dimension(1);
+	int numPoints       = leftHost.dimension(2);
 
 	// Deep copy Kokkos host views into device views
 	Kokkos::deep_copy(leftDevice, leftHost);
@@ -423,13 +424,13 @@ void contractFieldFieldScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=5, p=9, l=3, r=7;
+	int c=550000, p=9, l=3, r=7;
 
 	FieldContainer<double> in_c_l_p(c, l, p);
 	FieldContainer<double> in_c_r_p(c, r, p);
 	FieldContainer<double> out1_c_l_r(c, l, r);
-	FieldContainer<double> out2_c_l_r_l_r_l_r(c, l, r);
-	double zero = INTREPID_TOL*10000.0;
+	FieldContainer<double> out2_c_l_r(c, l, r);
+	double zero = Intrepid::INTREPID_TOL*10000.0;
 
 	// fill with random numbers
 	for (int i=0; i<in_c_l_p.size(); i++) {
@@ -522,14 +523,14 @@ int main(int argc, char* argv[]) {
 	std::cout << "trying serial" << std::endl;
 
 	//Warmup
-	contractFieldFieldScalarSerial(out2_c_l_r, in_l_c_p, in_r_c_p);
+	contractFieldFieldScalarSerial(out2_c_l_r, in_c_l_p, in_c_r_p);
 
 	timespec tic;
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
 	for(int i = 0; i < 5; ++i){
-		contractFieldFieldScalarSerial(out2_c_l_r, in_l_c_p, in_r_c_p);
+		contractFieldFieldScalarSerial(out2_c_l_r, in_c_l_p, in_c_r_p);
 	}
 
 	timespec toc;
