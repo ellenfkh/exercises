@@ -430,13 +430,13 @@ void contractFieldFieldScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=550000, p=9, l=3, r=7;
+	int c=1, p=2048, l=2048, r=2048;
 
 	FieldContainer<double> in_c_l_p(c, l, p);
 	FieldContainer<double> in_c_r_p(c, r, p);
 	FieldContainer<double> out1_c_l_r(c, l, r);
 	FieldContainer<double> out2_c_l_r(c, l, r);
-	double zero = Intrepid::INTREPID_TOL*10000.0;
+	double zero = Intrepid::INTREPID_TOL*100000.0;
 
 	// fill with random numbers
 	for (int i=0; i<in_c_l_p.size(); i++) {
@@ -581,9 +581,9 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos omp speedup of " << elapsedTime_serial/elapsedTime_kokkos_omp << std::endl;
-
+/*
 	printf("trying kokkos cuda\n");
-
+ 
 	//Warmpup
 	contractFieldFieldScalarKokkos<Kokkos::Cuda, cuda_input_view_t,
 		cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
@@ -618,7 +618,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
-
+*/
 	Kokkos::finalize();
 
 	std::cout << "trying cuda major" << std::endl;
