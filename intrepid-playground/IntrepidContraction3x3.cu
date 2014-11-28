@@ -512,7 +512,7 @@ int main(int argc, char* argv[]) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
 
-				cudaLeft[cl * p * r + lbf * p + qp] = in_c_l_p(cl,lbf,qp);
+				cudaLeft[cl * p * l + lbf * p + qp] = in_c_l_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
