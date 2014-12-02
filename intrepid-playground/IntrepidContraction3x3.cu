@@ -71,7 +71,7 @@ cudaDocontractFieldFieldScalar_kernelColMajor(double * d_left, double * d_right,
 
 __global__
 void
-cudaDocontractFieldFieldScalar_kernel(double * d_left, double * d_right,
+cudaDocontractFieldFieldScalar_kernel(const double * const __restrict__ d_left, const double * const __restrict__ d_right,
 double * d_out,
 int numCells,
 int numLeftFields,
@@ -89,8 +89,8 @@ int numPoints) {
 
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myMatrix*numPoints*numLeftFields + matrixRow*numPoints + qp] *
-							d_right[myMatrix*numPoints*numRightFields + matrixCol*numPoints + qp];
+			temp += d_left[myMatrix*numPoints*numLeftFields + qp*numLeftFields + matrixRow] *
+							d_right[myMatrix*numPoints*numRightFields + qp*numRightFields + matrixCol];
 		}
 		d_out[myID]= temp;
 	}
@@ -430,7 +430,7 @@ void contractFieldFieldScalarKokkos1D(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=1, p=2048, l=2048, r=2048;
+	int c=10000, p=10, l=10, r=10;
 
 	FieldContainer<double> in_c_l_p(c, l, p);
 	FieldContainer<double> in_c_r_p(c, r, p);
@@ -506,13 +506,13 @@ int main(int argc, char* argv[]) {
 				cuda_hostRight(cl,rbf, qp) = in_c_r_p(cl,rbf,qp);
 				omp_hostRight(cl,rbf,qp) = in_c_r_p(cl,rbf,qp);
 
-				cudaRight[cl * p * r + rbf * p + qp] = in_c_r_p(cl,rbf,qp);
+				cudaRight[cl * p * r + r * qp + rbf] = in_c_r_p(cl,rbf,qp);
 			}
 			for(int lbf = 0; lbf < l; ++lbf) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
 
-				cudaLeft[cl * p * l + lbf * p + qp] = in_c_l_p(cl,lbf,qp);
+				cudaLeft[cl * p * l + l * qp + lbf] = in_c_l_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
@@ -546,7 +546,7 @@ int main(int argc, char* argv[]) {
 	const double elapsedTime_serial = getElapsedTime(tic, toc);
 
 	printf("trying kokkos openmp\n");
-
+/*
 	//Warmpup
 	contractFieldFieldScalarKokkos<Kokkos::OpenMP, omp_input_view_t,
 		omp_output_view_t, omp_input_host_t, omp_output_host_t>
@@ -581,6 +581,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos omp speedup of " << elapsedTime_serial/elapsedTime_kokkos_omp << std::endl;
+*/
 /*
 	printf("trying kokkos cuda\n");
  
