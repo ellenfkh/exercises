@@ -132,6 +132,58 @@ cudaDoContractDataDataScalar(double * h_out,
 
 }
 
+__global__
+void
+cudaDocontractDataDataScalar_kernelUnrolled(double * d_left, double * d_right,
+double * d_out,
+int numCells,
+int numPoints) {
+
+	int myID = (blockIdx.x * blockDim.x) + threadIdx.x + (blockIdx.y * numPoints);
+
+	if(myID < numCells * numPoints) {
+		temp += d_left[myID*numPoints + qp] * d_right[myID*numPoints + qp];
+
+		d_out[myID]= temp;
+	}
+}
+
+void
+cudaDoContractDataDataScalarUnrolled(double * h_out,
+double * h_inLeft,
+double * h_inRight,
+int numCells,
+int numPoints,
+bool colMajor) {
+
+	double * d_right;
+	double * d_left;
+	double * d_out;
+
+	cudaMalloc(&d_right, sizeof(double) * numCells  * numPoints);
+
+	cudaMalloc(&d_left, sizeof(double) * numCells * numPoints);
+
+	cudaMalloc(&d_out, sizeof(double) * numCells);
+
+	cudaMemset(d_out, 0, sizeof(double) * numCells);
+
+	cudaMemcpy(d_right, h_inRight,
+	sizeof(double) * numCells * numPoints, cudaMemcpyHostToDevice);
+
+	cudaMemcpy(d_left, h_inLeft,
+	sizeof(double) * numCells * numPoints, cudaMemcpyHostToDevice);
+
+
+	dim3 blockSize(64);
+	dim3 gridSize((numPoints / 64) + 1, (numCells / 64) + 1);
+
+	cudaDocontractDataDataScalar_kernelUnrolled<<<gridSize, blockSize>>>(d_left,
+	d_right, d_out, numCells,numPoints);
+
+	cudaMemcpy(h_out, d_out, sizeof(double) * numCells, cudaMemcpyDeviceToHost);
+
+}
 
 
 template<class DeviceType, class LeftViewType, class RightViewType, class OutputViewType>
@@ -235,9 +287,10 @@ void contractDataDataScalarKokkos(output_host_t &   outHost,
 }
 
 int main(int argc, char* argv[]) {
+
 	int c=1000000, p=24;
   int numRepeats = 10;
-
+	
 	FieldContainer<double> inl_c_p(c, p);
 	FieldContainer<double> inr_c_p(c, p);
 	FieldContainer<double> out1_c(c);
@@ -417,9 +470,9 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
-		
+
 	Kokkos::finalize();
-	
+
 	std::cout << "trying cuda col major" << std::endl;
 	//Now try the cuda version, start with warmup
 	cudaDoContractDataDataScalar(cudaOut,cudaLeftColMajor,cudaRightColMajor, c, p, true);
@@ -443,7 +496,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "cuda col major speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
-	
+
 	std::cout << "trying cuda row major" << std::endl;
 	//Now try the cuda version, start with warmup
 	cudaDoContractDataDataScalar(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p, false);
@@ -467,7 +520,31 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "cuda row major speedup of " << elapsedTime_serial/elapsedTime_cudaRow << std::endl;
-	
+
+	std::cout << "trying cuda thread-per-index" << std::endl;
+	//Now try the cuda version, start with warmup
+	cudaDoContractDataDataScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
+
+	clock_gettime(CLOCK_MONOTONIC, &tic);
+	for(int i = 0; i < 5; ++i){
+		cudaDoContractDataDataScalarUnrolled(cudaOut,cudaLeftRowMajor,cudaRightRowMajor, c, p);
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, &toc);
+	const double elapsedTime_cudaUnrolled = getElapsedTime(tic, toc);
+
+	for (int cl = 0; cl < c; ++cl) {
+		out1_c(cl) = cudaOut[cl];
+	}
+
+	rst::subtract(&out1_c[0], &out2_c[0], out2_c.size());
+	if (rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) > zero) {
+		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check cuda unrolled; "
+		<< " diff-1norm = " << rst::vectorNorm(&out1_c[0], out1_c.size(), Intrepid::NORM_ONE) << "\n\n";
+	}
+
+	std::cout << "cuda unrolled speedup of " << elapsedTime_serial/elapsedTime_cudaUnrolled << std::endl;
+
 
 	return 0;
 }
