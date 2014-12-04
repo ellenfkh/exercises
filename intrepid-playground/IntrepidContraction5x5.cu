@@ -71,18 +71,19 @@ int dim2Tensor) {
 
     int lbf = matrixIndex / numRightFields;
     int rbf = matrixIndex % numRightFields;
+    int sub = dim1Tensor * dim2Tensor;
+    int left = myCell * numLeftFields * numPoints * sub + lbf * numPoints * sub;
+    int right = myCell * numPoints * sub * numRightFields;
+    int rsub = sub * numRightFields;
 
     double temp = 0;
     for (int qp = 0; qp < numPoints; qp++) {
       for (int iTens1 = 0; iTens1 < dim1Tensor; iTens1++) {
         for (int iTens2 = 0; iTens2 < dim2Tensor; iTens2++) {
-          temp += d_left[myCell * numLeftFields * numPoints * dim1Tensor * dim2Tensor +
-                         lbf * numPoints * dim1Tensor * dim2Tensor +
-                         qp * dim1Tensor * dim2Tensor +
+          temp += d_left[left + qp * sub +
                          iTens1 * dim2Tensor +
                          iTens2] *
-                  d_right[myCell * numPoints * dim1Tensor * dim2Tensor * numRightFields +
-                          qp *dim1Tensor * dim2Tensor * numRightFields +
+                  d_right[right + qp * rsub +
                           iTens1 * dim2Tensor * numRightFields +
                           iTens2 * numRightFields +
                           rbf];
@@ -135,6 +136,10 @@ cudaDocontractFieldFieldScalar(double * h_out,
 	cudaDeviceSynchronize();
 	clock_gettime(CLOCK_MONOTONIC, toc);
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
+
+  cudaFree(d_right);
+  cudaFree(d_left);
+  cudaFree(d_out);
 
 }
 
@@ -251,6 +256,8 @@ int main(int argc, char* argv[]) {
 	timespec toc;
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_serial = getElapsedTime(tic, toc);
+
+  std::cout << "serial took " << elapsedTime_serial << " second" << std::endl;
 
 	std::cout << "trying cuda" << std::endl;
 	//Now try the cuda version, start with warmup
