@@ -320,6 +320,30 @@ void contractFieldFieldScalarSerial(FieldContainer<double> &  outputFields,
 	} // C-loop
 }
 
+// Serial contractFieldFieldScalar.  Contracts arrays of doubles.
+void contractFieldFieldScalarSerialArray(double * outputFields, // c, l, r
+		double *             leftFields,  // c, l ,p
+	  double *             rightFields,  // c, r, p
+    int                  numCells,
+    int                  numLeftFields,
+    int                  numRightFields,
+    int                  numPoints) {
+
+  double tmpVal;
+	for (int cl = 0; cl < numCells; cl++) {
+		for (int lbf = 0; lbf < numLeftFields; lbf++) {
+			for (int rbf = 0; rbf < numRightFields; rbf++) {
+				tmpVal = 0;
+				for (int qp = 0; qp < numPoints; qp++) {
+					tmpVal += leftFields[cl * numLeftFields * numPoints + lbf * numPoints + qp]
+                  * rightFields[cl * numPoints * numRightFields + rbf * numPoints + qp];
+				} // P-loop
+				outputFields[cl * numLeftFields * numRightFields + lbf * numRightFields + rbf] = tmpVal;
+			} // R-loop
+		} // L-loop
+	} // C-loop
+}
+
 
 /*
  * Kokkos Cuda contractFieldFieldScalar.
@@ -467,13 +491,16 @@ int main(int argc, char* argv[]) {
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
 
-	//Cuda arrays
+	//Cuda and Serial arrays
+
+  double * serialRight = new double [c * r * p];
+  double * serialLeft = new double [c * l * p];
 
 	double * cudaRight = new double[c * r * p];
 	double * cudaLeft = new double[c * l * p];
 
+  double * serialOut = new double[c * l * r];
 	double * cudaOut = new double[c * l * r];
-
 
 	// Make equivalent Kokkos views
 
@@ -502,14 +529,16 @@ int main(int argc, char* argv[]) {
 			for(int rbf = 0; rbf < r; ++rbf) {
 				cuda_hostRight(cl,rbf, qp) = in_c_r_p(cl,rbf,qp);
 				omp_hostRight(cl,rbf,qp) = in_c_r_p(cl,rbf,qp);
+        serialRight[cl * p * r + rbf * p + qp] = in_c_r_p(cl,rbf,qp);
 
 				cudaRight[cl * p * r + r * qp + rbf] = in_c_r_p(cl,rbf,qp);
 			}
 			for(int lbf = 0; lbf < l; ++lbf) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
+				serialLeft[cl * p * l + lbf * p + qp] = in_c_l_p(cl,lbf,qp);;
 
-				cudaLeft[cl * p * l + l * qp + lbf] = in_c_l_p(cl,lbf,qp);
+				cudaLeft[cl * p * l + lbf * p + qp] = in_c_l_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);

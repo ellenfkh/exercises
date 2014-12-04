@@ -41,82 +41,74 @@ double random_double() {
   return (double) rand();
 }
 
-
 __global__
 void
 cudaDocontractFieldFieldScalar_kernel(const double * const __restrict__ d_left, const double * const __restrict__ d_right,
-double * d_out,
-int numCells,
-int numLeftFields,
-int numRightFields,
-int numPoints) {
+    double * d_out,
+    int numCells,
+    int numLeftFields,
+    int numRightFields,
+    int numPoints) {
 
-	int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
+  int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
+  if(myID < (numCells * numLeftFields * numRightFields)) {
 
-	if(myID < (numCells * numLeftFields * numRightFields)) {
-		int myMatrix = myID / (numLeftFields * numRightFields);
-		int matrixIndex = myID % (numLeftFields * numRightFields);
+    int myMatrix = myID / (numLeftFields * numRightFields);
+    int matrixIndex = myID % (numLeftFields * numRightFields);
+    int matrixRow = matrixIndex / numRightFields;
+    int matrixCol = matrixIndex % numRightFields;
+    double temp = 0;
+    for (int qp = 0; qp < numPoints; qp++) {
 
-		int matrixRow = matrixIndex / numRightFields;
-		int matrixCol = matrixIndex % numRightFields;
+      temp += d_left[myMatrix*numPoints*numLeftFields + numPoints*matrixRow + qp] *
+        d_right[myMatrix*numPoints*numRightFields + qp*numRightFields + matrixCol];
 
-		double temp = 0;
-		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myMatrix*numPoints*numLeftFields + qp*numLeftFields + matrixRow] *
-							d_right[myMatrix*numPoints*numRightFields + qp*numRightFields + matrixCol];
-		}
-		d_out[myID]= temp;
-	}
+    }
+    d_out[myID]= temp;
+
+  }
+
 }
 
 void
 cudaDocontractFieldFieldScalar(double * h_out,
-		double * h_inLeft,
-		double * h_inRight,
-		int numCells,
-		int numLeftFields,
-		int numRightFields,
-		int numPoints,
-    double * time = 0) {
+    double * h_inLeft,
+    double * h_inRight,
+    int numCells,
+    int numLeftFields,
+    int numRightFields,
+    int numPoints,
+    timespec * tic = NULL,
+    timespec * toc = NULL) {
 
-	double * d_right;
-	double * d_left;
-	double * d_out;
+  double * d_right;
+  double * d_left;
+  double * d_out;
 
-	cudaMalloc(&d_right, sizeof(double) * numCells  * numPoints * numRightFields);
+  cudaMalloc(&d_right, sizeof(double) * numCells * numPoints * numRightFields);
+  cudaMalloc(&d_left, sizeof(double) * numCells * numPoints * numLeftFields);
+  cudaMalloc(&d_out, sizeof(double) * numCells * numRightFields * numLeftFields);
+  cudaMemset(d_out, 0, sizeof(double) * numCells * numRightFields * numLeftFields);
 
-	cudaMalloc(&d_left, sizeof(double) * numCells * numPoints * numLeftFields);
+  cudaMemcpy(d_right, h_inRight,
+      sizeof(double) * numCells * numPoints * numRightFields, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_left, h_inLeft,
+      sizeof(double) * numCells * numPoints * numLeftFields, cudaMemcpyHostToDevice);
 
-	cudaMalloc(&d_out, sizeof(double) * numCells * numRightFields * numLeftFields);
+  dim3 blockSize(1024);
+  dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
 
-	cudaMemset(d_out, 0, sizeof(double) * numCells * numRightFields * numLeftFields);
+  if (tic != NULL)
+    clock_gettime(CLOCK_MONOTONIC, tic);
 
-	cudaMemcpy(d_right, h_inRight,
-			sizeof(double) * numCells * numPoints * numRightFields, cudaMemcpyHostToDevice);
-
-	cudaMemcpy(d_left, h_inLeft,
-			sizeof(double) * numCells * numPoints * numLeftFields, cudaMemcpyHostToDevice);
-
-
-	dim3 blockSize(1024);
-	dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
-
-  timespec tic;
-  timespec toc;
-  if (time != NULL)
-	  clock_gettime(CLOCK_MONOTONIC, &tic);
-	
   cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
-			d_right, d_out, numCells, numLeftFields, numRightFields, numPoints);
-
+      d_right, d_out, numCells, numLeftFields, numRightFields, numPoints);
   cudaDeviceSynchronize();
-  if (time != NULL) {
-    clock_gettime(CLOCK_MONOTONIC, &toc);
-    *time += getElapsedTime(tic, toc);
-  }
-  
 
-	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
+  if (toc != NULL)
+    clock_gettime(CLOCK_MONOTONIC, toc);
+
+  cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
 
 }
 
@@ -188,6 +180,7 @@ struct contractFieldFieldScalarCudaFunctor {
 
 	KOKKOS_INLINE_FUNCTION
 		void operator()(const unsigned int elementIndex) const {
+
       int myID = elementIndex;
       int myMatrix = myID / (_numLeftFields * _numRightFields);
       int matrixIndex = myID % (_numLeftFields * _numRightFields);
@@ -197,7 +190,7 @@ struct contractFieldFieldScalarCudaFunctor {
 
       double temp = 0;
       for (int qp = 0; qp < _numPoints; qp++) {
-        temp += _leftFields(myMatrix, qp, matrixRow) * _rightFields(myMatrix, qp, matrixCol);
+        temp += _leftFields(myMatrix, matrixRow, qp) * _rightFields(myMatrix, qp, matrixCol);
       }
       _outputFields(matrixIndex, matrixRow, matrixCol) = temp;
 		}
@@ -330,7 +323,7 @@ void contractFieldFieldScalarKokkosCuda(output_host_t &   outHost,
 
 
 int main(int argc, char* argv[]) {
-	int c=10000, p=10, l=10, r=10;
+	int c=10000, p=1000, l=10, r=10;
 
   // Seet the random
   srand(time(NULL));
@@ -358,7 +351,7 @@ int main(int argc, char* argv[]) {
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
 
-	//Cuda arrays
+	//Cuda and Serial arrays
 
   double * serialRight = new double [c * r * p];
   double * serialLeft = new double [c * l * p];
@@ -406,9 +399,9 @@ int main(int argc, char* argv[]) {
         n = random_double();
 				cuda_hostLeft(cl, lbf, qp) = n;
 				omp_hostLeft(cl,lbf, qp) = n;
-				serialLeft[cl * p * l + l * qp + lbf] = n;
+				serialLeft[cl * p * l  + lbf * p + qp] = n;
 
-				cudaLeft[cl * p * l + l * qp + lbf] = n;
+				cudaLeft[cl * p * l + lbf * p + qp] = n;
 			}
 		}
 	}
@@ -435,6 +428,8 @@ int main(int argc, char* argv[]) {
 	timespec toc;
 	clock_gettime(CLOCK_MONOTONIC, &toc);
 	const double elapsedTime_serial = getElapsedTime(tic, toc);
+
+  std::cout << "serial elapsed time: " << elapsedTime_serial << " sec" << std::endl;
 
 	printf("trying kokkos openmp\n");
 
@@ -509,13 +504,10 @@ int main(int argc, char* argv[]) {
 	cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
 
   double elapsedTime_cuda_nocopy = 0;
-	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, &elapsedTime_cuda_nocopy);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, &tic, &toc);
+    elapsedTime_cuda_nocopy += getElapsedTime(tic, toc);
 	}
-
-	clock_gettime(CLOCK_MONOTONIC, &toc);
-	const double elapsedTime_cuda = getElapsedTime(tic, toc);
 
   // Disabling checking for now 
 #if 0
