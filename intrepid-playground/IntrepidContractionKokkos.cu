@@ -76,7 +76,8 @@ cudaDocontractFieldFieldScalar(double * h_out,
 		int numCells,
 		int numLeftFields,
 		int numRightFields,
-		int numPoints) {
+		int numPoints,
+    double * time = 0) {
 
 	double * d_right;
 	double * d_left;
@@ -100,8 +101,20 @@ cudaDocontractFieldFieldScalar(double * h_out,
 	dim3 blockSize(1024);
 	dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
 
-	cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
+  timespec tic;
+  timespec toc;
+  if (time != NULL)
+	  clock_gettime(CLOCK_MONOTONIC, &tic);
+	
+  cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
 			d_right, d_out, numCells, numLeftFields, numRightFields, numPoints);
+
+  cudaDeviceSynchronize();
+  if (time != NULL) {
+    clock_gettime(CLOCK_MONOTONIC, &toc);
+    *time += getElapsedTime(tic, toc);
+  }
+  
 
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
 
@@ -467,15 +480,16 @@ int main(int argc, char* argv[]) {
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	//repeat the calculation 5 times so we can average out some randomness
+  double elapsedTime_kokkos_cuda_nocopy = 0;
 	for(int i = 0; i < 5; ++i){
 		contractFieldFieldScalarKokkosCuda<Kokkos::Cuda, cuda_input_view_t,
 			cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>
 				(cuda_hostOut, cuda_hostLeft, cuda_hostRight, cuda_kokkosOut,
-				 cuda_kokkosLeft, cuda_kokkosRight);
+				 cuda_kokkosLeft, cuda_kokkosRight, &elapsedTime_kokkos_cuda_nocopy);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
-	const double elapsedTime_kokkos_cuda = getElapsedTime(tic, toc);
+	const double elapsedTime_kokkos_cuda_with_copy = getElapsedTime(tic, toc);
 
 // No checking right now
   /*
@@ -486,7 +500,7 @@ int main(int argc, char* argv[]) {
 	}
   */
 
-	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda << std::endl;
+	std::cout << "kokkos cuda speedup of " << elapsedTime_serial/elapsedTime_kokkos_cuda_nocopy << std::endl;
 
 	Kokkos::finalize();
 
@@ -494,9 +508,10 @@ int main(int argc, char* argv[]) {
 	//Now try the cuda version, start with warmup
 	cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
 
+  double elapsedTime_cuda_nocopy = 0;
 	clock_gettime(CLOCK_MONOTONIC, &tic);
 	for(int i = 0; i < 5; ++i){
-		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, &elapsedTime_cuda_nocopy);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &toc);
@@ -511,7 +526,7 @@ int main(int argc, char* argv[]) {
 	}
 #endif
 
-	std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
+	std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda_nocopy << std::endl;
 
 
 	return 0;
