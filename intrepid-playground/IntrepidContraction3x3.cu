@@ -1,7 +1,4 @@
 // -*- C++ -*-
-// matrixMultiplication.cc
-// a huge comparison of doing naive and tiled matrix multiplication using many
-//  different methods and technologies
 
 #include <cmath>
 #include <cstdio>
