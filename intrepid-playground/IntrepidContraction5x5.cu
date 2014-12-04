@@ -65,7 +65,7 @@ int dim2Tensor) {
 
   int myID = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-  if(myID < (numCells * numLeftFields * numRightFields * dim1Tensor * dim2Tensor)) {
+  if(myID < (numCells * numLeftFields * numRightFields)) {
     int myCell = myID / (numLeftFields * numRightFields);
     int matrixIndex = myID % (numLeftFields * numRightFields);
 
@@ -182,6 +182,7 @@ int main(int argc, char* argv[]) {
 	FieldContainer<double> out1_c_l_r(c, l, r);
 	FieldContainer<double> out2_c_l_r(c, l, r);
 	double zero = Intrepid::INTREPID_TOL*100000.0;
+  zero *= 10;
 
 	// fill with random numbers
 	for (int i=0; i<in_c_l_p_t1_t2.size(); i++) {
