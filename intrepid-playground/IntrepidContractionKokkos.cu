@@ -108,6 +108,10 @@ cudaDocontractFieldFieldScalar(double * h_out,
   if (toc != NULL)
     clock_gettime(CLOCK_MONOTONIC, toc);
 
+  cudaFree(d_right);
+  cudaFree(d_left);
+  cudaFree(d_out);
+
   cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
 
 }
