@@ -89,7 +89,7 @@ int numPoints) {
 
 		double temp = 0;
 		for (int qp = 0; qp < numPoints; qp++) {
-			temp += d_left[myMatrix*numPoints*numLeftFields + qp*numLeftFields + matrixRow] *
+			temp += d_left[myMatrix*numPoints*numLeftFields + numPoints*matrixRow + qp] *
 							d_right[myMatrix*numPoints*numRightFields + qp*numRightFields + matrixCol];
 		}
 		d_out[myID]= temp;
@@ -103,7 +103,9 @@ cudaDocontractFieldFieldScalar(double * h_out,
 		int numCells,
 		int numLeftFields,
 		int numRightFields,
-		int numPoints) {
+		int numPoints,
+		timespec * tic,
+		timespec * toc) {
 
 	double * d_right;
 	double * d_left;
@@ -126,10 +128,13 @@ cudaDocontractFieldFieldScalar(double * h_out,
 
 	dim3 blockSize(1024);
 	dim3 gridSize((numCells * numLeftFields * numRightFields / 1024) + 1);
-
+	
+	clock_gettime(CLOCK_MONOTONIC, tic);
 	cudaDocontractFieldFieldScalar_kernel<<<gridSize, blockSize>>>(d_left,
 			d_right, d_out, numCells, numLeftFields, numRightFields, numPoints);
-
+	
+	cudaDeviceSynchronize();
+	clock_gettime(CLOCK_MONOTONIC, toc);
 	cudaMemcpy(h_out, d_out, sizeof(double) * numCells * numLeftFields * numRightFields, cudaMemcpyDeviceToHost);
 
 }
@@ -512,7 +517,7 @@ int main(int argc, char* argv[]) {
 				cuda_hostLeft(cl, lbf, qp) = in_c_l_p(cl,lbf, qp);
 				omp_hostLeft(cl,lbf, qp) = in_c_l_p(cl,lbf,qp);
 
-				cudaLeft[cl * p * l + l * qp + lbf] = in_c_l_p(cl,lbf,qp);
+				cudaLeft[cl * p * l + p * lbf + qp] = in_c_l_p(cl,lbf,qp);
 			}
 			//cudaRightColMajor[cl + c*qp] = in_r_c_p(cl,qp);
 			//cudaLeftColMajor[cl + c*qp] = in_l_c_p(cl,qp);
@@ -614,7 +619,7 @@ int main(int argc, char* argv[]) {
 
 	rst::subtract(&out1_c_l_r[0], &out2_c_l_r[0], out2_c_l_r.size());
 	if (rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) > zero) {
-		std::cout << "\n\nINCORRECT contractFieldFieldTensor (1): check COMP_CPP vs. COMP_KOKKOS; "
+		std::cout << "\n\nINCORRECT contractFieldFieldTensor (0): check COMP_CPP vs. COMP_KOKKOS; "
 			<< " diff-1norm = " << rst::vectorNorm(&out1_c_l_r[0], out1_c_l_r.size(), Intrepid::NORM_ONE) << "\n\n";
 	}
 
@@ -624,15 +629,13 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "trying cuda major" << std::endl;
 	//Now try the cuda version, start with warmup
-	cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
-
-	clock_gettime(CLOCK_MONOTONIC, &tic);
+	cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, &tic, &toc);
+	double elapsedTime_cuda = 0;
+	
 	for(int i = 0; i < 5; ++i){
-		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p);
+		cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, &tic, &toc);
+		elapsedTime_cuda += getElapsedTime(tic,toc);
 	}
-
-	clock_gettime(CLOCK_MONOTONIC, &toc);
-	const double elapsedTime_cuda = getElapsedTime(tic, toc);
 
 	for (int cl = 0; cl < c; ++cl) {
 		for(int lbf = 0; lbf < l; ++lbf) {
