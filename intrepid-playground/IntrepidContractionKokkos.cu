@@ -241,7 +241,7 @@ void contractFieldFieldScalarKokkos(output_host_t &   outHost,
 		output_view_t &                           outDevice,
 		input_view_t &                            leftDevice,
 		input_view_t &                            rightDevice,
-		double *                                  time = 0) {
+		double *                                  time = NULL) {
 
 	// get sizes
 	int numCells        = leftHost.dimension(0);
@@ -255,7 +255,7 @@ void contractFieldFieldScalarKokkos(output_host_t &   outHost,
 	Kokkos::deep_copy(outDevice, outHost);
 
 	timespec tic;
-	if(time != 0)
+	if(time != NULL)
 		clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	contractFieldFieldScalarFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
@@ -267,7 +267,7 @@ void contractFieldFieldScalarKokkos(output_host_t &   outHost,
 	Kokkos::fence();
 
 	timespec toc;
-	if(time !=0){
+	if(time != NULL){
 		clock_gettime(CLOCK_MONOTONIC, &toc);
 		*time += getElapsedTime(tic, toc);
 	}
@@ -291,7 +291,7 @@ void contractFieldFieldScalarKokkosCuda(output_host_t &   outHost,
 		output_view_t &                           outDevice,
 		input_view_t &                            leftDevice,
 		input_view_t &                            rightDevice,
-		double *                                  time = 0) {
+		double *                                  time = NULL) {
 
 	// get sizes
 	int numCells        = leftHost.dimension(0);
@@ -305,7 +305,7 @@ void contractFieldFieldScalarKokkosCuda(output_host_t &   outHost,
 	Kokkos::deep_copy(outDevice, outHost);
 
 	timespec tic;
-	if(time != 0)
+	if(time != NULL)
 		clock_gettime(CLOCK_MONOTONIC, &tic);
 
 	contractFieldFieldScalarCudaFunctor<DeviceType, input_view_t, input_view_t, output_view_t>
@@ -317,7 +317,7 @@ void contractFieldFieldScalarKokkosCuda(output_host_t &   outHost,
 	Kokkos::fence();
 
 	timespec toc;
-	if(time !=0){
+	if(time != NULL){
 		clock_gettime(CLOCK_MONOTONIC, &toc);
 		*time += getElapsedTime(tic, toc);
 	}
@@ -343,14 +343,14 @@ int main(int argc, char* argv[]) {
 	Kokkos::initialize();
 
 	// Kokkos Cuda views
-	typedef Kokkos::View<double ***, Kokkos::Cuda> cuda_input_view_t;
-	typedef Kokkos::View<double ***, Kokkos::Cuda> cuda_output_view_t;
+	typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda> cuda_input_view_t;
+	typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda> cuda_output_view_t;
 	typedef typename cuda_input_view_t::HostMirror cuda_input_host_t;
 	typedef typename cuda_output_view_t::HostMirror cuda_output_host_t;
 
 	// Kokkos OpenMP views
-	typedef Kokkos::View<double ***, Kokkos::OpenMP> omp_input_view_t;
-	typedef Kokkos::View<double ***, Kokkos::OpenMP> omp_output_view_t;
+	typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::OpenMP> omp_input_view_t;
+	typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::OpenMP> omp_output_view_t;
 	typedef typename omp_input_view_t::HostMirror omp_input_host_t;
 	typedef typename omp_output_view_t::HostMirror omp_output_host_t;
 
