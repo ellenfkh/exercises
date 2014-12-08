@@ -184,17 +184,18 @@ struct contractFieldFieldTensorFunctor {
     LeftViewType _leftFields;
     RightViewType _rightFields;
     OutputViewType _outputFields;
-    int _numPoints;
+    int _numCells;
     int _numLeftFields;
     int _numRightFields;
+    int _numPoints;
     int _dim1Tens;
     int _dim2Tens;
 
     contractFieldFieldTensorFunctor(LeftViewType leftFields, RightViewType
-    rightFields, OutputViewType outputFields, int numPoints, int numLeftFields, int
-    numRightFields, int dim1Tens, int dim2Tens) :
+    rightFields, OutputViewType outputFields, int numCells, int numLeftFields, int
+    numRightFields, int numPoints, int dim1Tens, int dim2Tens) :
     _leftFields(leftFields), _rightFields(rightFields),
-    _outputFields(outputFields), _numPoints(numPoints),
+    _outputFields(outputFields), _numCells(numCells), _numPoints(numPoints),
     _numLeftFields(numLeftFields), _numRightFields(numRightFields),
     _dim1Tens(dim1Tens), _dim2Tens(dim2Tens)
     {
@@ -205,34 +206,35 @@ struct contractFieldFieldTensorFunctor {
 	void operator() (const unsigned int elementIndex) const {
 	    int myID = elementIndex;
 
-	    if(myID < (_numPoints * _numLeftFields * _numRightFields)) {
+	    if(myID < (_numCells * _numLeftFields * _numRightFields)) {
 		int myCell = myID / (_numLeftFields * _numRightFields);
 		int matrixIndex = myID % (_numLeftFields * _numRightFields);
 
 		int lbf = matrixIndex / _numRightFields;
 		int rbf = matrixIndex % _numRightFields;
 		int sub = _dim1Tens * _dim2Tens;
-		int left1 = myCell* _numLeftFields* _numPoints;
-		int left2 = lbf* _numPoints * sub;
-		int left = myCell * _numLeftFields * _numPoints * sub + lbf * _numPoints * sub;
-		int right = myCell * _numPoints * sub * _numRightFields;
+		int left1 = myCell* _numLeftFields* _numCells;
+		int left2 = lbf* _numCells * sub;
+		int left = myCell * _numLeftFields * _numCells * sub + lbf *
+		_numCells * sub;
+		int right = myCell * _numCells * sub * _numRightFields;
 		int rsub = sub * _numRightFields;
 
 		double temp = 0;
 		for (int qp = 0; qp < _numPoints; qp++) {
 		    for (int iTens1 = 0; iTens1 < _dim1Tens; iTens1++) {
 			for (int iTens2 = 0; iTens2 < _dim2Tens; iTens2++) {
-			    temp += _leftFields(left1, left2, qp * sub,
-				iTens1 * _dim2Tens,
+			    temp += _leftFields(myCell, lbf, qp,
+				iTens1,
 				iTens2) *
-				_rightFields(right, qp * rsub,
-				iTens1 * _dim2Tens * _numRightFields,
-				iTens2 * _numRightFields,
+				_rightFields(myCell, qp,
+				iTens1,
+				iTens2,
 				rbf);
 			}
 		    }
 		}
-		_outputFields(myID)= temp;
+		_outputFields(myCell, lbf, rbf)= temp;
 	    }
 	}
 
@@ -248,15 +250,20 @@ void contractFieldFieldTensorKokkos(output_host_t& outHost,
     output_view_t & outDevice,
     input_view_t & leftDevice,
     input_view_t & rightDevice,
+    int numCells,
+    int numLeftFields,
+    int numRightFields,
+    int numPoints,
     int dim1Tens,
     int dim2Tens,
     double* time = NULL) {
     
+    /*
     int numCells = leftHost.dimension(0);
     int numLeftFields = leftHost.dimension(1);
-    int numRightFields = rightHost.dimension(1);
+    int numRightFields = rightHost.dimension(4);
     int numPoints = leftHost.dimension(2);
-    
+    */
 
     Kokkos::deep_copy(leftDevice, leftHost);
     Kokkos::deep_copy(rightDevice, rightHost);
@@ -269,9 +276,9 @@ void contractFieldFieldTensorKokkos(output_host_t& outHost,
 
     contractFieldFieldTensorFunctor<DeviceType, input_view_t, input_view_t,
     output_view_t> kokkosFunctor(leftDevice, rightDevice, outDevice,
-    numPoints, numLeftFields, numRightFields, dim1Tens, dim2Tens);
+    numCells, numLeftFields, numRightFields, numPoints, dim1Tens, dim2Tens);
 
-    Kokkos::parallel_for(numCells, kokkosFunctor);
+    Kokkos::parallel_for(numCells*numLeftFields*numRightFields, kokkosFunctor);
 
     Kokkos::fence();
 
@@ -416,19 +423,21 @@ int main(int argc, char* argv[]) {
     cuda_input_host_t cuda_hostRight("left_input", c, p, t1, t2, r);
     cuda_output_host_t cuda_hostOut("left_input", c, l, r);
 
+    printf("fililng views\n");
+
     for (int cl = 0; cl < c; ++cl) {
 	for (int qp = 0; qp < p; ++qp) {
 	    for (int iTens1 = 0; iTens1 < t1; ++iTens1) {
 		for (int iTens2 = 0; iTens2 < t2; ++iTens2) {
 		    for(int rbf = 0; rbf < r; ++rbf) {
-			cuda_kokkosRight(cl,
+			cuda_hostRight(cl,
 			    qp, 
 			    iTens1,
 			    iTens2,
 			    rbf) = in_c_r_p_t1_t2(cl, rbf,qp, iTens1, iTens2);
 		    }
 		    for(int lbf = 0; lbf < l; ++lbf) {
-			cuda_kokkosLeft(cl, 
+			cuda_hostLeft(cl, 
 			    lbf,
 			    qp,
 			    iTens1,
@@ -445,16 +454,18 @@ int main(int argc, char* argv[]) {
     contractFieldFieldTensorKokkos<Kokkos::Cuda, cuda_input_view_t,
     cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>(cuda_hostOut,
     cuda_hostLeft, cuda_hostRight, cuda_kokkosOut, cuda_kokkosLeft,
-    cuda_kokkosRight, t1, t2);
+    cuda_kokkosRight, c, l, r, p, t1, t2);
     clock_gettime(CLOCK_MONOTONIC, &tic);
 
+    printf("Done with warmup\n");
+    
     double elapsedTime_kokkos_cuda_nocopy = 0;
     for (int i = 0; i < 5; i++) {
 	// Do 5 times
 	contractFieldFieldTensorKokkos<Kokkos::Cuda, cuda_input_view_t,
 	    cuda_output_view_t, cuda_input_host_t, cuda_output_host_t>(cuda_hostOut,
 	    cuda_hostLeft, cuda_hostRight, cuda_kokkosOut, cuda_kokkosLeft,
-	    cuda_kokkosRight, t1, t2, &elapsedTime_kokkos_cuda_nocopy);
+	    cuda_kokkosRight, c, l, r, p, t1, t2, &elapsedTime_kokkos_cuda_nocopy);
     }
     clock_gettime(CLOCK_MONOTONIC, &toc);
     
