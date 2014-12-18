@@ -1,3 +1,14 @@
+/*
+ *
+ * Contract array of matrices (c, l, p) to array of vectors (c, p) to get array
+ * of vectors (c, l).
+ *
+ * cached: (c, l, p) by (c, p)
+ * coalesced: (c, p, l) by (c, p) parallelized over c and l
+ *
+ */
+
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +49,7 @@ void serial(double* inputFields, double* inputData, double* output,
   } // C-loop
 }
 
+#if 0
 
 template<class DeviceType, class FieldViewType, class DataViewType, class OutputViewType>
 struct contractFieldFieldScalarFunctor {
@@ -76,6 +88,7 @@ struct contractFieldFieldScalarFunctor {
   }
 };
 
+#endif
 
 
 
@@ -87,6 +100,7 @@ int main(int argc, char* argv[]) {
   timespec toc;
 
   std::cerr << "before init" << std::endl;
+
   Kokkos::initialize();
 
   std::cerr << "after init" << std::endl;
@@ -98,6 +112,7 @@ int main(int argc, char* argv[]) {
   double* inputData = new double[c * p];
   double* serialOutput = new double[c * f];
 
+#if 0
   typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda> cuda3d_t;
   typedef Kokkos::View<double **, Kokkos::LayoutRight, Kokkos::Cuda> cuda2d_t;
   typedef typename cuda3d_t::HostMirror host_cuda3d_t;
@@ -111,6 +126,7 @@ int main(int argc, char* argv[]) {
   host_cuda2d_t hostCuda_inputData = Kokkos::create_mirror_view(cuda_inputData);
   host_cuda2d_t hostCuda_output = Kokkos::create_mirror_view(cuda_output);
 
+#endif
 
   double tmp;
   for (int cl = 0; cl < c; cl++) {
@@ -118,7 +134,7 @@ int main(int argc, char* argv[]) {
       for (int qp = 0; qp < p; qp++) {
         tmp = (double)std::rand();
         inputFields[cl * f * p + lbf * p + qp] = tmp;
-        cuda_inputFields(cl, qp, lbf) = tmp;
+        //cuda_inputFields(cl, qp, lbf) = tmp;
       } // P-loop
     } // F-loop
   } // C-loop
@@ -127,14 +143,14 @@ int main(int argc, char* argv[]) {
     for (int qp = 0; qp < p; qp++) {
       tmp = (double)std::rand();
       inputData[cl * p + qp] = tmp;
-      cuda_inputData(cl, qp) = tmp;
+      //cuda_inputData(cl, qp) = tmp;
     } // P-loop
   } // C-loop
 
   for (int cl = 0; cl < c; cl++) {
     for (int lbf = 0; lbf < f; lbf++) {
       serialOutput[cl * f + lbf] = 0;
-      cuda_output(cl, lbf) = 0;
+      //cuda_output(cl, lbf) = 0;
     } // F-loop
   } // C-loop
 
