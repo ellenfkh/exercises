@@ -49,10 +49,8 @@ void serial(double* inputFields, double* inputData, double* output,
   } // C-loop
 }
 
-#if 0
-
 template<class DeviceType, class FieldViewType, class DataViewType, class OutputViewType>
-struct contractFieldFieldScalarFunctor {
+struct ContractFieldFieldScalarFunctor {
   typedef DeviceType device_type;
   FieldViewType _inputFields;
   DataViewType _inputData;
@@ -60,7 +58,7 @@ struct contractFieldFieldScalarFunctor {
   int _numPoints;
   int _numFields;
 
-  contractFieldFieldScalarFunctor(FieldViewType inputFields,
+  ContractFieldFieldScalarFunctor(FieldViewType inputFields,
       DataViewType inputData,
       OutputViewType output,
       int numPoints,
@@ -82,13 +80,11 @@ struct contractFieldFieldScalarFunctor {
 
     double tmpVal = 0;
     for (int qp = 0; qp < _numPoints; qp++) {
-      tmpVal += _inputFields(cl, qp, lbf)*_inputData(cl,  qp);
+      tmpVal += _inputFields(cl, qp, lbf) * _inputData(cl,  qp);
     } // P-loop
     _output(cl, lbf) = tmpVal;
   }
 };
-
-#endif
 
 
 
@@ -99,11 +95,7 @@ int main(int argc, char* argv[]) {
   timespec tic;
   timespec toc;
 
-  std::cerr << "before init" << std::endl;
-
   Kokkos::initialize();
-
-  std::cerr << "after init" << std::endl;
 
 
   // Setup
@@ -112,7 +104,6 @@ int main(int argc, char* argv[]) {
   double* inputData = new double[c * p];
   double* serialOutput = new double[c * f];
 
-#if 0
   typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda> cuda3d_t;
   typedef Kokkos::View<double **, Kokkos::LayoutRight, Kokkos::Cuda> cuda2d_t;
   typedef typename cuda3d_t::HostMirror host_cuda3d_t;
@@ -126,15 +117,13 @@ int main(int argc, char* argv[]) {
   host_cuda2d_t hostCuda_inputData = Kokkos::create_mirror_view(cuda_inputData);
   host_cuda2d_t hostCuda_output = Kokkos::create_mirror_view(cuda_output);
 
-#endif
-
   double tmp;
   for (int cl = 0; cl < c; cl++) {
     for (int lbf = 0; lbf < f; lbf++) {
       for (int qp = 0; qp < p; qp++) {
         tmp = (double)std::rand();
         inputFields[cl * f * p + lbf * p + qp] = tmp;
-        //cuda_inputFields(cl, qp, lbf) = tmp;
+        hostCuda_inputFields(cl, qp, lbf) = tmp;
       } // P-loop
     } // F-loop
   } // C-loop
@@ -143,14 +132,14 @@ int main(int argc, char* argv[]) {
     for (int qp = 0; qp < p; qp++) {
       tmp = (double)std::rand();
       inputData[cl * p + qp] = tmp;
-      //cuda_inputData(cl, qp) = tmp;
+      hostCuda_inputData(cl, qp) = tmp;
     } // P-loop
   } // C-loop
 
   for (int cl = 0; cl < c; cl++) {
     for (int lbf = 0; lbf < f; lbf++) {
       serialOutput[cl * f + lbf] = 0;
-      //cuda_output(cl, lbf) = 0;
+      hostCuda_output(cl, lbf) = 0;
     } // F-loop
   } // C-loop
 
@@ -165,7 +154,44 @@ int main(int argc, char* argv[]) {
   std::cout << "cache friendly serial time: " << elapsedTime_serial << std::endl;
 
 
+  // Kokkos
+
+  Kokkos::deep_copy(cuda_inputFields, hostCuda_inputFields);
+  Kokkos::deep_copy(cuda_inputData, hostCuda_inputData);
+  //Kokkos::deep_copy(cuda_output, hostCuda_output);
+
+  ContractFieldFieldScalarFunctor<Kokkos::Cuda, cuda3d_t, cuda2d_t, cuda2d_t>
+    kokkosFunctor(cuda_inputFields, cuda_inputData, cuda_output, p, f);
+
+  for (int i = 0; i < repeats; i++) {
+    Kokkos::parallel_for(c*f, kokkosFunctor);
+    Kokkos::fence();
+  }
+
+
+  clock_gettime(CLOCK_MONOTONIC, &tic);
+  for (int i = 0; i < repeats; i++) {
+    Kokkos::parallel_for(c*f, kokkosFunctor);
+    Kokkos::fence();
+  }
+  clock_gettime(CLOCK_MONOTONIC, &toc);
+  const double elapsedTime_kokkosCuda = getElapsedTime(tic, toc);
+
+  Kokkos::deep_copy(hostCuda_output, cuda_output);
+
+  for (int cl = 0; cl < c; cl++) {
+    for (int lbf = 0; lbf < f; lbf++) {
+      double diff = serialOutput[cl * f + lbf] - hostCuda_output(cl, lbf);
+      if (abs(diff) > 1.0e-6) {
+        std::cerr << "output mismatch at" << cl << ", "<< lbf << std::endl;
+        std::cerr << "diff: " << diff << std::endl;
+        exit(0);
+      }
+    } // F-loop
+  } // C-loop
+
+  std::cout << "kokkos cuda time: " << elapsedTime_kokkosCuda << std::endl;
+  std::cout << "kokkos cuda speedup: " << elapsedTime_serial/elapsedTime_kokkosCuda << std::endl;
 
   Kokkos::finalize();
-
 }
