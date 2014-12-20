@@ -44,7 +44,7 @@ void serial(double* inputFields, double* inputData, double* output,
       for (int qp = 0; qp < p; qp++) {
         tmpVal += inputFields[cl * f * p + lbf * p + qp]*inputData[cl * p + qp];
       } // P-loop
-      output[cl * f + lbf] += tmpVal;
+      output[cl * f + lbf] = tmpVal;
     } // F-loop
   } // C-loop
 }
@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
 
   Kokkos::deep_copy(cuda_inputFields, hostCuda_inputFields);
   Kokkos::deep_copy(cuda_inputData, hostCuda_inputData);
-  //Kokkos::deep_copy(cuda_output, hostCuda_output);
+  Kokkos::deep_copy(cuda_output, hostCuda_output);
 
   ContractFieldFieldScalarFunctor<Kokkos::Cuda, cuda3d_t, cuda2d_t, cuda2d_t>
     kokkosFunctor(cuda_inputFields, cuda_inputData, cuda_output, p, f);
@@ -181,10 +181,12 @@ int main(int argc, char* argv[]) {
 
   for (int cl = 0; cl < c; cl++) {
     for (int lbf = 0; lbf < f; lbf++) {
-      double diff = serialOutput[cl * f + lbf] - hostCuda_output(cl, lbf);
-      if (abs(diff) > 1.0e-6) {
+      double err = serialOutput[cl * f + lbf] / hostCuda_output(cl, lbf);
+      if ((abs(err) - 1) > 1.0e-6) {
         std::cerr << "output mismatch at" << cl << ", "<< lbf << std::endl;
-        std::cerr << "diff: " << diff << std::endl;
+        std::cerr << "diff: " << err << std::endl;
+        std::cerr << "serial: " << serialOutput[cl * f + lbf] << std::endl;
+        std::cerr << "kokkos: " << hostCuda_output(cl, lbf) << std::endl;
         exit(0);
       }
     } // F-loop
