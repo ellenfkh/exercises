@@ -51,7 +51,7 @@ double getElapsedTime(const timespec start, const timespec end) {
   return double(temp.tv_sec) + double(temp.tv_nsec) / 1e9;
 }
 
-template<class Scalar, class ArrayOutFields, class ArrayInData, class ArrayInFields>
+template<class ArrayOutFields, class ArrayInData, class ArrayInFields>
 void scalarMultiplyDataField(ArrayOutFields &     outputFields,
                                          const ArrayInData &  inputData,
                                          ArrayInFields &      inputFields,
@@ -467,15 +467,81 @@ void scalarMultiplyDataField(ArrayOutFields &     outputFields,
 
 
 int main(int argc, char* argv[]) {
-    int c = 1000, p = 10, l = 10, r = 10, t1 = 10, t2 = 10;
+    int c = 10000, p = 1000; //l = 10, r = 10, t1 = 10, t2 = 10;
+    int b = 100;
 
-    FieldContainer<double> in_c_l_p_t1_t2(c, l, p, t1, t2);
-    FieldContainer<double> in_c_r_p_t1_t2(c, r, p, t1, t2);
-    FieldContainer<double> out1_c_l_r(c, l, r);
-    FieldContainer<double> out2_c_l_r(c, l, r);
+    FieldContainer<double> in_Fields_3(c, b, p);
+    FieldContainer<double> in_Data_2(c, p);
 
+    FieldContainer<double> out_Fields3_Serial(c, b, p);
+    FieldContainer<double> out_Fields3(c, b, p);
+
+    for (int i = 0; i < in_Fields_3.size(); i++) {
+	in_Fields_3[i] = Teuchos::ScalarTraits<double>::random();
+    }
+    for (int i = 0; i < in_Data_2.size(); i++) {
+	in_Data_2[i] = Teuchos::ScalarTraits<double>::random();
+    }
+    std::cout << "Created the vectors" << std::endl;
+
+    std::cout << "Trying serial" << std::endl;
+
+    timespec tic;
+    clock_gettime(CLOCK_MONOTONIC, &tic);
+
+    scalarMultiplyDataField<FieldContainer<double>, FieldContainer<double>,
+    FieldContainer<double> >(out_Fields3_Serial, in_Data_2, in_Fields_3, false);
+
+    timespec toc;
+    clock_gettime(CLOCK_MONOTONIC, &toc);
+    const double elapsedTime_serial = getElapsedTime(tic, toc);
+
+    std::cout << "serial took " << elapsedTime_serial << " seconds" <<
+    std::endl;
+    
 
     Kokkos::initialize();
+
+    typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda>
+    cuda_input_fields_3;
+    typedef Kokkos::View<double **, Kokkos::LayoutRight, Kokkos::Cuda>
+    cuda_input_data_2;
+
+    typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::Cuda>
+    cuda_output_fields_3;
+
+    typedef typename cuda_input_fields_3::HostMirror cuda_input_fields_3_host;
+    typedef typename cuda_input_data_2::HostMirror cuda_input_data_2_host;
+    typedef typename cuda_output_fields_3::HostMirror cuda_output_fields_3_host;
+
+    /*
+    typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::OpenMP>
+    omp_input_view_t;
+    typedef Kokkos::View<double ***, Kokkos::LayoutRight, Kokkos::OpenMP>
+    omp_output_view_t;
+    */
+
+    cuda_input_fields_3 cuda_kokkosInputFields("input_Fields", c, b, p);
+    cuda_input_data_2 cuda_kokkosInputData("input_Data", c, p);
+    cuda_output_fields_3 cuda_kokkosOut("output", c, b, p);
+
+    cuda_input_fields_3_host cuda_hostFields("left_input", c, b, p);
+    cuda_input_data_2_host cuda_hostData("left_input", c, p);
+    cuda_output_fields_3_host cuda_hostOut("left_input", c, b, p);
+
+    printf("filling views\n");
+    
+    for (int cl = 0; cl < c; cl++) {
+	for (int pt = 0; pt < p; pt++) {
+	    for (int bf = 0; bf < b; bf++) {
+		cuda_hostFields(cl, bf, pt) = in_Fields_3(cl, bf, pt);
+	    }
+	    cuda_hostData(cl, pt) = in_Data_2(cl, pt);
+	}
+    }
+		
+    //Now I need to call the function that will create the functor and run!
+
 
     Kokkos::finalize();
 

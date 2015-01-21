@@ -210,8 +210,10 @@ struct contractFieldFieldTensorFunctor {
 		int myCell = myID / (_numLeftFields * _numRightFields);
 		int matrixIndex = myID % (_numLeftFields * _numRightFields);
 
+		
 		int lbf = matrixIndex / _numRightFields;
 		int rbf = matrixIndex % _numRightFields;
+		/*
 		int sub = _dim1Tens * _dim2Tens;
 		int left1 = myCell* _numLeftFields* _numCells;
 		int left2 = lbf* _numCells * sub;
@@ -219,7 +221,7 @@ struct contractFieldFieldTensorFunctor {
 		_numCells * sub;
 		int right = myCell * _numCells * sub * _numRightFields;
 		int rsub = sub * _numRightFields;
-
+		*/
 		double temp = 0;
 		for (int qp = 0; qp < _numPoints; qp++) {
 		    for (int iTens1 = 0; iTens1 < _dim1Tens; iTens1++) {
@@ -373,7 +375,7 @@ int main(int argc, char* argv[]) {
   const double elapsedTime_serial = getElapsedTime(tic, toc);
 
   std::cout << "serial took " << elapsedTime_serial << " second" << std::endl;
-
+/*
   std::cout << "trying cuda" << std::endl;
   //Now try the cuda version, start with warmup
   cudaDocontractFieldFieldScalar(cudaOut,cudaLeft,cudaRight, c, l, r, p, t1, t2, &tic, &toc);
@@ -398,7 +400,7 @@ int main(int argc, char* argv[]) {
   }
 
   std::cout << "cuda speedup of " << elapsedTime_serial/elapsedTime_cuda << std::endl;
-
+*/
 
     Kokkos::initialize();
 
@@ -468,9 +470,19 @@ int main(int argc, char* argv[]) {
 	    cuda_kokkosRight, c, l, r, p, t1, t2, &elapsedTime_kokkos_cuda_nocopy);
     }
     clock_gettime(CLOCK_MONOTONIC, &toc);
-    
-    std::cout << "kokkos cuda sppedup of " <<
-    elapsedTime_serial/elapsedTime_kokkos_cuda_nocopy << std::endl;
+   
+    for (int i = 0; i < out2_c_l_r.size(); i++) {
+	// The indexing needs help on this problem!!!!
+	double diff = cuda_kokkosOut(i%c, fig out l, fig out r) - out2_c_l_r(i);
+	if (diff < 0) {
+	    diff = diff *(-1);
+	}
+	if (diff > cuda_kokkosOut(i)*.0000001) {
+	    printf("Error in Compute\n");
+	}
+    }
+
+    std::cout << "kokkos runtime of " << elapsedTime_kokkos_cuda_nocopy << std::endl;
 
     Kokkos::finalize();
 
